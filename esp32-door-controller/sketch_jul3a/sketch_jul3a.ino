@@ -9,14 +9,17 @@
 
 const char* WIFI_SSID = "P301";
 const char* WIFI_PASSWORD = "66668888";
-const char* PI_BASE_URL = "http://192.168.1.50:8000";
+const char* PI_BASE_URL = "http://192.168.0.153:8000";
 const char* DOOR_ID = "door-01";
 const char* DEVICE_API_KEY = "esp32_door_01_private_secret";
 
-const int SERVO_PIN = 4;
-const int BUTTON_PIN = 6;
+const int NFC_RST_PIN = 14;
 const int NFC_SS_PIN = 10;
-const int NFC_RST_PIN =14;
+const int SERVO_PIN = 4;
+const int BUZZER_PIN = 5;
+const int BUTTON_PIN = 6;  // Button connects to GND, uses INPUT_PULLUP.
+const int SERVO_CLOSED_ANGLE = 0;
+const int SERVO_OPEN_ANGLE = 90;
 
 WebServer server(80);
 Servo lockServo;
@@ -33,9 +36,11 @@ bool unlocking = false;
 void localUnlock(int durationMs) {
   if (unlocking) return;
   unlocking = true;
-  lockServo.write(90);
+  tone(BUZZER_PIN, 2200, 80);
+  lockServo.write(SERVO_OPEN_ANGLE);
   delay(durationMs);
-  lockServo.write(0);
+  lockServo.write(SERVO_CLOSED_ANGLE);
+  tone(BUZZER_PIN, 1600, 80);
   unlocking = false;
 }
 
@@ -125,8 +130,9 @@ void readButton() {
 void setup() {
   Serial.begin(115200);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(BUZZER_PIN, OUTPUT);
   lockServo.attach(SERVO_PIN);
-  lockServo.write(0);
+  lockServo.write(SERVO_CLOSED_ANGLE);
   SPI.begin();
   nfc.PCD_Init();
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);

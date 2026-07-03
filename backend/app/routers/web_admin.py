@@ -1,23 +1,29 @@
 import csv
 import io
+import json
+from pathlib import Path
+from uuid import uuid4
 from datetime import datetime, time, timezone
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.access_log import AccessLog
 from app.models.admin import Admin
 from app.models.attendance_log import AttendanceLog
 from app.models.door import Door, DoorSetting
+from app.models.face_profile import FaceProfile
 from app.models.nfc_card import NfcCard
 from app.models.nfc_enrollment import NfcEnrollment
 from app.models.user import User
 from app.security import authenticate_admin, clear_session, create_session, get_current_admin, require_admin_page
 from app.services.access_policy_service import AccessEvent, evaluate_access
 from app.services.door_service import ensure_default_door, get_settings_for_door
+from app.services.face_service import face_service
 from app.services.nfc_service import start_enrollment
 
 router = APIRouter(tags=["admin"])
@@ -149,13 +155,63 @@ def faces_stub(user_id: int, request: Request, db: Session = Depends(get_db), ad
     if not user:
         raise HTTPException(404)
     cards = db.scalars(select(NfcCard).where(NfcCard.user_id == user_id).order_by(NfcCard.created_at.desc())).all()
+    face_profiles = db.scalars(select(FaceProfile).where(FaceProfile.user_id == user_id).order_by(FaceProfile.created_at.desc())).all()
     pending = db.scalar(select(NfcEnrollment).where(NfcEnrollment.user_id == user_id, NfcEnrollment.active.is_(True)).order_by(NfcEnrollment.created_at.desc()))
-    return templates(request).TemplateResponse("users/faces.html", {"request": request, "admin": admin, "user": user, "cards": cards, "pending": pending, "message": request.query_params.get("message")})
+    return templates(request).TemplateResponse("users/faces.html", {"request": request, "admin": admin, "user": user, "cards": cards, "face_profiles": face_profiles, "pending": pending, "message": request.query_params.get("message")})
 
 
 @router.post("/admin/users/{user_id}/faces/enroll")
-def face_enroll_stub(user_id: int, admin: Admin = Depends(require_admin_page)):
-    return RedirectResponse(f"/admin/users/{user_id}/faces", status_code=303)
+async def face_enroll(
+    user_id: int,
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin_page),
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404)
+    saved = 0
+    failed = 0
+    face_dir = get_settings().data_path / "faces" / str(user_id)
+    face_dir.mkdir(parents=True, exist_ok=True)
+    for upload in files[:5]:
+        content = await upload.read()
+        frame = _decode_image(content)
+        if frame is None:
+            failed += 1
+            continue
+        embedding = face_service.get_embedding(frame)
+        if embedding is None:
+            failed += 1
+            continue
+        suffix = Path(upload.filename or "face.jpg").suffix.lower() or ".jpg"
+        if suffix not in {".jpg", ".jpeg", ".png"}:
+            suffix = ".jpg"
+        image_path = face_dir / f"{uuid4().hex}{suffix}"
+        image_path.write_bytes(content)
+        db.add(
+            FaceProfile(
+                user_id=user_id,
+                embedding=json.dumps(embedding),
+                image_path=str(image_path),
+                model_name=f"{face_service.model_name}{'-mock' if face_service.is_mock_mode() else ''}",
+                quality_score=0.50 if face_service.is_mock_mode() else 1.0,
+            )
+        )
+        saved += 1
+    db.commit()
+    message = f"face_saved_{saved}_failed_{failed}"
+    return RedirectResponse(f"/admin/users/{user_id}/faces?message={message}", status_code=303)
+
+
+def _decode_image(content: bytes):
+    try:
+        import cv2
+        import numpy as np
+
+        return cv2.imdecode(np.frombuffer(content, np.uint8), cv2.IMREAD_COLOR)
+    except Exception:
+        return None
 
 
 @router.post("/admin/users/{user_id}/nfc/enroll")

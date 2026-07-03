@@ -7,11 +7,11 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
-const char* WIFI_SSID = "P301";
-const char* WIFI_PASSWORD = "66668888";
-const char* PI_BASE_URL = "http://192.168.0.153:8000";
+const char* WIFI_SSID = "YOUR_WIFI";
+const char* WIFI_PASSWORD = "YOUR_PASSWORD";
+const char* PI_BASE_URL = "http://192.168.1.50:8000";
 const char* DOOR_ID = "door-01";
-const char* DEVICE_API_KEY = "esp32_door_01_private_secret";
+const char* DEVICE_API_KEY = "change-me";
 
 const int NFC_RST_PIN = 14;
 const int NFC_SS_PIN = 10;

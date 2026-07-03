@@ -1,5 +1,6 @@
 import json
 import logging
+from hashlib import sha256
 from dataclasses import dataclass
 
 import numpy as np
@@ -45,8 +46,31 @@ class FaceService:
     def get_embedding(self, frame) -> list[float] | None:
         faces = self.detect_faces(frame)
         if not faces:
+            if self.app is None:
+                return self._mock_embedding(frame)
             return None
         return faces[0].embedding.astype(float).tolist()
+
+    def is_mock_mode(self) -> bool:
+        return self.app is None
+
+    def _mock_embedding(self, frame) -> list[float]:
+        # Keeps enrollment/test flows usable on machines without InsightFace.
+        resized = frame
+        try:
+            import cv2
+
+            resized = cv2.resize(frame, (16, 8))
+            gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+            values = gray.astype(np.float32).flatten()
+        except Exception:
+            digest = sha256(str(frame).encode()).digest()
+            values = np.frombuffer(digest * 4, dtype=np.uint8).astype(np.float32)
+        values = values[:128]
+        if values.size < 128:
+            values = np.pad(values, (0, 128 - values.size))
+        norm = float(np.linalg.norm(values))
+        return (values / norm).astype(float).tolist() if norm else values.astype(float).tolist()
 
     @staticmethod
     def compare_embeddings(first: list[float], second: list[float]) -> float:
