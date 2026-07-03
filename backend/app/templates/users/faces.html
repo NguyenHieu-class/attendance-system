@@ -19,6 +19,9 @@
 {% if message == "face_deleted" %}
 <div class="alert alert-success">Da xoa face profile.</div>
 {% endif %}
+{% if message == "nfc_deleted" %}
+<div class="alert alert-success">Da xoa the NFC.</div>
+{% endif %}
 <div class="row g-4">
   <div class="col-lg-7">
     <h2 class="h5">Face enrollment by USB camera</h2>
@@ -72,11 +75,21 @@
   <button class="btn btn-primary">Start NFC enrollment</button>
 </form>
     <table class="table table-sm mt-3">
-      <tr><th>ID</th><th>Label</th><th>Active</th><th>Created</th></tr>
+      <tr><th>ID</th><th>Label</th><th>Active</th><th>Created</th><th></th></tr>
       {% for card in cards %}
-      <tr><td>{{ card.id }}</td><td>{{ card.card_label or "" }}</td><td>{{ "yes" if card.active else "no" }}</td><td>{{ card.created_at }}</td></tr>
+      <tr>
+        <td>{{ card.id }}</td>
+        <td>{{ card.card_label or "" }}</td>
+        <td>{{ "yes" if card.active else "no" }}</td>
+        <td>{{ card.created_at }}</td>
+        <td class="text-end">
+          <form method="post" action="/admin/users/{{ user.id }}/nfc/{{ card.id }}/delete" onsubmit="return confirm('Delete this NFC card?')">
+            <button class="btn btn-sm btn-outline-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
       {% else %}
-      <tr><td colspan="4" class="text-muted">No NFC cards enrolled yet.</td></tr>
+      <tr><td colspan="5" class="text-muted">No NFC cards enrolled yet.</td></tr>
       {% endfor %}
     </table>
   </div>

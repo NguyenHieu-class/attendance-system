@@ -277,6 +277,20 @@ def nfc_enroll(user_id: int, door_id: str = Form("door-01"), db: Session = Depen
     return RedirectResponse(f"/admin/users/{user_id}/faces?message=nfc_waiting", status_code=303)
 
 
+@router.post("/admin/users/{user_id}/nfc/{card_id}/delete")
+def delete_nfc_card(
+    user_id: int,
+    card_id: int,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin_page),
+):
+    card = db.get(NfcCard, card_id)
+    if card and card.user_id == user_id:
+        db.delete(card)
+        db.commit()
+    return RedirectResponse(f"/admin/users/{user_id}/faces?message=nfc_deleted", status_code=303)
+
+
 @router.get("/admin/attendance")
 def attendance(request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
     logs = db.scalars(select(AttendanceLog).order_by(AttendanceLog.created_at.desc()).limit(200)).all()

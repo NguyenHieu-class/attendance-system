@@ -24,6 +24,7 @@ const int SERVO_OPEN_ANGLE = 90;
 WebServer server(80);
 Servo lockServo;
 MFRC522 nfc(NFC_SS_PIN, NFC_RST_PIN);
+const char* AUTH_HEADER_KEYS[] = {"X-API-Key"};
 
 bool physicalButtonEnabled = true;
 bool allowOfflineMasterCard = false;
@@ -73,12 +74,18 @@ void fetchConfig() {
 }
 
 void handleUnlock() {
-  if (server.header("X-API-Key") != DEVICE_API_KEY) {
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, server.arg("plain"));
+  if (err) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"bad_json\"}");
+    return;
+  }
+  String headerKey = server.header("X-API-Key");
+  String bodyKey = doc["signature"] | "";
+  if (headerKey != DEVICE_API_KEY && bodyKey != DEVICE_API_KEY) {
     server.send(401, "application/json", "{\"ok\":false}");
     return;
   }
-  JsonDocument doc;
-  deserializeJson(doc, server.arg("plain"));
   int duration = doc["duration_ms"] | unlockDurationMs;
   localUnlock(duration);
   server.send(200, "application/json", "{\"ok\":true}");
@@ -136,6 +143,7 @@ void setup() {
   SPI.begin();
   nfc.PCD_Init();
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  server.collectHeaders(AUTH_HEADER_KEYS, 1);
   server.on("/unlock", HTTP_POST, handleUnlock);
   server.on("/status", HTTP_GET, handleStatus);
   server.begin();
