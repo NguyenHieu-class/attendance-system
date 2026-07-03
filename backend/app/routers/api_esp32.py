@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -29,14 +29,19 @@ def require_device_key(x_api_key: str | None = Header(default=None)) -> None:
         raise HTTPException(status_code=401, detail="invalid api key")
 
 
+def client_host(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
 @router.post("/{door_id}/heartbeat")
-def heartbeat(door_id: str, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
-    door = update_heartbeat(db, door_id)
-    return {"ok": True, "door_id": door.door_id, "status": door.status}
+def heartbeat(door_id: str, request: Request, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
+    door = update_heartbeat(db, door_id, client_host(request))
+    return {"ok": True, "door_id": door.door_id, "status": door.status, "esp32_base_url": door.esp32_base_url}
 
 
 @router.get("/{door_id}/config")
-def device_config(door_id: str, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
+def device_config(door_id: str, request: Request, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
+    update_heartbeat(db, door_id, client_host(request))
     setting = get_settings_for_door(db, door_id)
     return {
         "door_id": door_id,
@@ -49,7 +54,8 @@ def device_config(door_id: str, db: Session = Depends(get_db), _: None = Depends
 
 
 @router.post("/{door_id}/nfc-scan")
-async def nfc_scan(door_id: str, payload: NfcScan, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
+async def nfc_scan(door_id: str, payload: NfcScan, request: Request, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
+    update_heartbeat(db, door_id, client_host(request))
     enrolled = consume_enrollment(db, door_id, payload.uid)
     if enrolled:
         return {"allowed": False, "reason": "card_enrolled", "user_id": enrolled.user_id, "should_unlock": False}
@@ -58,13 +64,14 @@ async def nfc_scan(door_id: str, payload: NfcScan, db: Session = Depends(get_db)
 
 
 @router.post("/{door_id}/button-event")
-async def button_event(door_id: str, payload: ButtonEvent, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
+async def button_event(door_id: str, payload: ButtonEvent, request: Request, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
+    update_heartbeat(db, door_id, client_host(request))
     return await evaluate_access(db, AccessEvent(door_id=door_id, method="physical_button", reason=payload.event), dispatch_unlock=False)
 
 
 @router.post("/{door_id}/door-status")
-def door_status(door_id: str, payload: DoorStatus, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
-    door = update_heartbeat(db, door_id)
+def door_status(door_id: str, payload: DoorStatus, request: Request, db: Session = Depends(get_db), _: None = Depends(require_device_key)) -> dict:
+    door = update_heartbeat(db, door_id, client_host(request))
     door.status = payload.status
     db.commit()
     return {"ok": True}

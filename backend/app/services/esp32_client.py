@@ -23,13 +23,20 @@ class Esp32Client:
             "signature": "",
         }
         headers = {"X-API-Key": get_settings().esp32_shared_secret}
+        url = f"{door.esp32_base_url.rstrip('/')}/unlock"
         try:
             async with httpx.AsyncClient(timeout=self.timeout_sec) as client:
-                response = await client.post(f"{door.esp32_base_url.rstrip('/')}/unlock", json=payload, headers=headers)
+                response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
             return True
+        except httpx.HTTPStatusError as exc:
+            logger.warning("ESP32 unlock failed for %s url=%s status=%s body=%s", door.door_id, url, exc.response.status_code, exc.response.text[:200])
+            return False
+        except httpx.RequestError as exc:
+            logger.warning("ESP32 unlock failed for %s url=%s error=%s", door.door_id, url, repr(exc))
+            return False
         except Exception as exc:  # Hardware/network failure must not crash the backend.
-            logger.warning("ESP32 unlock failed for %s: %s", door.door_id, exc)
+            logger.warning("ESP32 unlock failed for %s url=%s error=%s", door.door_id, url, repr(exc))
             return False
 
     async def status(self, door: Door) -> dict:

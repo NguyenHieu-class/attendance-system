@@ -40,10 +40,12 @@ def get_settings_for_door(db: Session, door_id: str) -> DoorSetting:
     return setting
 
 
-def update_heartbeat(db: Session, door_id: str) -> Door:
+def update_heartbeat(db: Session, door_id: str, client_host: str | None = None) -> Door:
     door = db.scalar(select(Door).where(Door.door_id == door_id)) or ensure_default_door(db)
     door.status = "online"
     door.last_seen_at = now_utc()
+    if client_host:
+        door.esp32_base_url = f"http://{client_host}"
     db.commit()
     db.refresh(door)
     return door
