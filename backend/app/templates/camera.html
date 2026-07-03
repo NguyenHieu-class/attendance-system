@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3">USB camera</h1>
+  <span class="badge text-bg-{{ 'success' if camera.running else 'secondary' }}">{{ 'running' if camera.running else 'stopped' }}</span>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="camera-preview">
+      {% if camera.running %}
+      <img src="/api/face/camera/stream" alt="USB camera stream">
+      {% else %}
+      <div class="camera-empty">Camera is stopped</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <form method="post" action="/admin/camera/start" class="mb-3">
+      <label class="form-label">Door ID</label>
+      <input name="door_id" value="{{ camera.door_id or 'door-01' }}" class="form-control mb-3">
+      <div class="form-check mb-3">
+        <input name="recognize" class="form-check-input" type="checkbox" {% if camera.recognition_enabled %}checked{% endif %}>
+        <label class="form-check-label">Enable live face recognition</label>
+      </div>
+      <button class="btn btn-primary">Start camera</button>
+    </form>
+
+    <form method="post" action="/admin/camera/recognition" class="mb-3">
+      <input name="door_id" value="{{ camera.door_id or 'door-01' }}" type="hidden">
+      <div class="form-check mb-2">
+        <input name="enabled" class="form-check-input" type="checkbox" {% if camera.recognition_enabled %}checked{% endif %}>
+        <label class="form-check-label">Recognition enabled</label>
+      </div>
+      <button class="btn btn-outline-secondary">Update recognition</button>
+    </form>
+
+    <form method="post" action="/admin/camera/stop">
+      <button class="btn btn-outline-danger">Stop camera</button>
+    </form>
+
+    <h2 class="h6 mt-4">Last result</h2>
+    <pre class="small bg-white border rounded p-2">{{ camera }}</pre>
+  </div>
+</div>
+{% endblock %}

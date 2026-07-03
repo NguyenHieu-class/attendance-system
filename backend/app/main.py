@@ -8,6 +8,7 @@ from app.database import create_all
 from app.routers import api_attendance, api_devices, api_doors, api_esp32, api_faces, api_nfc, api_users, web_admin
 from app.services.door_service import ensure_default_door
 from app.services.face_service import face_service
+from app.services.camera_service import camera_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -27,6 +28,11 @@ def startup() -> None:
         ensure_default_door(db)
     finally:
         db.close()
+
+
+@app.on_event("shutdown")
+def shutdown() -> None:
+    camera_service.stop()
 
 
 app.include_router(web_admin.router)

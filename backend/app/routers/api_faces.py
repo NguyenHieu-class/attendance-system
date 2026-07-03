@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.services.access_policy_service import AccessEvent, evaluate_access
+from app.services.camera_service import camera_service
 from app.services.door_service import get_settings_for_door
 
 router = APIRouter(prefix="/api/face", tags=["face"])
@@ -26,3 +28,15 @@ async def recognize(door_id: str = "door-01", file: UploadFile = File(...), db: 
 @router.post("/enroll")
 async def enroll_stub() -> dict:
     return {"ok": False, "reason": "use admin user face enrollment skeleton; camera capture is planned after MVP"}
+
+
+@router.get("/camera/stream")
+def camera_stream() -> StreamingResponse:
+    if not camera_service.status()["running"]:
+        camera_service.start()
+    return StreamingResponse(camera_service.mjpeg_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@router.get("/camera/status")
+def camera_status() -> dict:
+    return camera_service.status()

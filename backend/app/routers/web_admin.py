@@ -22,6 +22,7 @@ from app.models.nfc_enrollment import NfcEnrollment
 from app.models.user import User
 from app.security import authenticate_admin, clear_session, create_session, get_current_admin, require_admin_page
 from app.services.access_policy_service import AccessEvent, evaluate_access
+from app.services.camera_service import camera_service
 from app.services.door_service import ensure_default_door, get_settings_for_door
 from app.services.face_service import face_service
 from app.services.nfc_service import start_enrollment
@@ -240,6 +241,30 @@ def doors(request: Request, db: Session = Depends(get_db), admin: Admin = Depend
     ensure_default_door(db)
     doors = db.scalars(select(Door)).all()
     return templates(request).TemplateResponse("doors/list.html", {"request": request, "admin": admin, "doors": doors})
+
+
+@router.get("/admin/camera")
+def camera_page(request: Request, admin: Admin = Depends(require_admin_page)):
+    return templates(request).TemplateResponse("camera.html", {"request": request, "admin": admin, "camera": camera_service.status()})
+
+
+@router.post("/admin/camera/start")
+def camera_start(door_id: str = Form("door-01"), recognize: str | None = Form(None), admin: Admin = Depends(require_admin_page)):
+    camera_service.start(door_id=door_id, recognition_enabled=recognize == "on")
+    camera_service.enable_recognition(recognize == "on", door_id=door_id)
+    return RedirectResponse("/admin/camera", status_code=303)
+
+
+@router.post("/admin/camera/recognition")
+def camera_recognition(door_id: str = Form("door-01"), enabled: str | None = Form(None), admin: Admin = Depends(require_admin_page)):
+    camera_service.enable_recognition(enabled == "on", door_id=door_id)
+    return RedirectResponse("/admin/camera", status_code=303)
+
+
+@router.post("/admin/camera/stop")
+def camera_stop(admin: Admin = Depends(require_admin_page)):
+    camera_service.stop()
+    return RedirectResponse("/admin/camera", status_code=303)
 
 
 @router.get("/admin/doors/{door_id}/settings")

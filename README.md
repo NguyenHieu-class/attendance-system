@@ -66,6 +66,24 @@ Set `ESP32_SHARED_SECRET` in `backend/.env` to the same value as `DEVICE_API_KEY
 6. Change door mode under Doors > Settings.
 7. Use `Unlock Door` for admin remote unlock.
 
+## USB Webcam Live Recognition
+
+Connect the USB webcam to the Raspberry Pi and set `CAMERA_INDEX` in `backend/.env`. Most single-camera setups use:
+
+```env
+CAMERA_INDEX=0
+```
+
+Test capture first:
+
+```bash
+cd attendance-system/backend
+source .venv/bin/activate
+python ../scripts/test_camera.py
+```
+
+Then open `http://RASPBERRY_PI_IP:8000/admin/camera`, start the camera, and enable live recognition. The backend reads frames from the USB webcam, recognizes faces against enrolled `face_profiles`, applies the selected door access mode, writes logs, and sends unlock commands to ESP32 when allowed.
+
 ## Backup
 
 Stop the backend and copy `backend/attendance.db` to a safe location:
