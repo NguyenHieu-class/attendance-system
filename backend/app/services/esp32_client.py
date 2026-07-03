@@ -14,15 +14,16 @@ class Esp32Client:
         self.timeout_sec = timeout_sec
 
     async def unlock(self, door: Door, duration_ms: int, source: str, user_id: int | None) -> bool:
+        settings = get_settings()
         payload = {
             "command_id": str(uuid4()),
             "duration_ms": duration_ms,
             "source": source,
             "user_id": user_id,
             "door_id": door.door_id,
-            "signature": "",
+            "signature": settings.esp32_shared_secret,
         }
-        headers = {"X-API-Key": get_settings().esp32_shared_secret}
+        headers = {"X-API-Key": settings.esp32_shared_secret}
         url = f"{door.esp32_base_url.rstrip('/')}/unlock"
         try:
             async with httpx.AsyncClient(timeout=self.timeout_sec) as client:
