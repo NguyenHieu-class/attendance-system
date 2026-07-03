@@ -2,28 +2,40 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.nfc_card import NfcCard
+from app.models.nfc_enrollment import NfcEnrollment
 from app.models.user import User
-from app.security import hash_nfc_uid
-
-_pending_enroll: dict[str, int] = {}
+from app.security import hash_nfc_uid, now_utc
 
 
-def start_enrollment(door_id: str, user_id: int) -> None:
-    _pending_enroll[door_id] = user_id
+def start_enrollment(db: Session, door_id: str, user_id: int) -> NfcEnrollment:
+    for existing in db.scalars(select(NfcEnrollment).where(NfcEnrollment.door_id == door_id, NfcEnrollment.active.is_(True))).all():
+        existing.active = False
+        existing.consumed_at = now_utc()
+    enrollment = NfcEnrollment(door_id=door_id, user_id=user_id, active=True)
+    db.add(enrollment)
+    db.commit()
+    db.refresh(enrollment)
+    return enrollment
 
 
 def consume_enrollment(db: Session, door_id: str, raw_uid: str) -> NfcCard | None:
-    user_id = _pending_enroll.pop(door_id, None)
-    if not user_id:
+    enrollment = db.scalar(
+        select(NfcEnrollment)
+        .where(NfcEnrollment.door_id == door_id, NfcEnrollment.active.is_(True))
+        .order_by(NfcEnrollment.created_at.desc())
+    )
+    if not enrollment:
         return None
     uid_hash = hash_nfc_uid(raw_uid)
     card = db.scalar(select(NfcCard).where(NfcCard.card_uid_hash == uid_hash))
     if card:
-        card.user_id = user_id
+        card.user_id = enrollment.user_id
         card.active = True
     else:
-        card = NfcCard(user_id=user_id, card_uid_hash=uid_hash, card_label="ESP32 enrolled", active=True)
+        card = NfcCard(user_id=enrollment.user_id, card_uid_hash=uid_hash, card_label="ESP32 enrolled", active=True)
         db.add(card)
+    enrollment.active = False
+    enrollment.consumed_at = now_utc()
     db.commit()
     db.refresh(card)
     return card

@@ -12,6 +12,8 @@ from app.models.access_log import AccessLog
 from app.models.admin import Admin
 from app.models.attendance_log import AttendanceLog
 from app.models.door import Door, DoorSetting
+from app.models.nfc_card import NfcCard
+from app.models.nfc_enrollment import NfcEnrollment
 from app.models.user import User
 from app.security import authenticate_admin, clear_session, create_session, get_current_admin, require_admin_page
 from app.services.access_policy_service import AccessEvent, evaluate_access
@@ -144,7 +146,11 @@ def delete_user(user_id: int, db: Session = Depends(get_db), admin: Admin = Depe
 @router.get("/admin/users/{user_id}/faces")
 def faces_stub(user_id: int, request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
     user = db.get(User, user_id)
-    return templates(request).TemplateResponse("users/faces.html", {"request": request, "admin": admin, "user": user})
+    if not user:
+        raise HTTPException(404)
+    cards = db.scalars(select(NfcCard).where(NfcCard.user_id == user_id).order_by(NfcCard.created_at.desc())).all()
+    pending = db.scalar(select(NfcEnrollment).where(NfcEnrollment.user_id == user_id, NfcEnrollment.active.is_(True)).order_by(NfcEnrollment.created_at.desc()))
+    return templates(request).TemplateResponse("users/faces.html", {"request": request, "admin": admin, "user": user, "cards": cards, "pending": pending, "message": request.query_params.get("message")})
 
 
 @router.post("/admin/users/{user_id}/faces/enroll")
@@ -153,9 +159,12 @@ def face_enroll_stub(user_id: int, admin: Admin = Depends(require_admin_page)):
 
 
 @router.post("/admin/users/{user_id}/nfc/enroll")
-def nfc_enroll(user_id: int, door_id: str = Form("door-01"), admin: Admin = Depends(require_admin_page)):
-    start_enrollment(door_id, user_id)
-    return RedirectResponse(f"/admin/users/{user_id}/faces", status_code=303)
+def nfc_enroll(user_id: int, door_id: str = Form("door-01"), db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404)
+    start_enrollment(db, door_id, user_id)
+    return RedirectResponse(f"/admin/users/{user_id}/faces?message=nfc_waiting", status_code=303)
 
 
 @router.get("/admin/attendance")

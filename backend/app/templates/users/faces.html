@@ -1,9 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
 <h1 class="h3">{{ user.full_name if user else "User" }}</h1>
+{% if message == "nfc_waiting" or pending %}
+<div class="alert alert-info">Dang cho quet the NFC tren {{ pending.door_id if pending else "door-01" }}. Hay dua the vao dau doc ESP32.</div>
+{% endif %}
 <p class="text-muted">Face enrollment UI is prepared as a post-MVP screen. NFC enrollment is active now.</p>
 <form method="post" action="/admin/users/{{ user.id }}/nfc/enroll" class="d-flex gap-2 align-items-end">
   <div><label class="form-label">Door</label><input name="door_id" value="door-01" class="form-control"></div>
   <button class="btn btn-primary">Start NFC enrollment</button>
 </form>
+<h2 class="h5 mt-4">NFC cards</h2>
+<table class="table table-sm">
+  <tr><th>ID</th><th>Label</th><th>Active</th><th>Created</th></tr>
+  {% for card in cards %}
+  <tr><td>{{ card.id }}</td><td>{{ card.card_label or "" }}</td><td>{{ "yes" if card.active else "no" }}</td><td>{{ card.created_at }}</td></tr>
+  {% else %}
+  <tr><td colspan="4" class="text-muted">No NFC cards enrolled yet.</td></tr>
+  {% endfor %}
+</table>
 {% endblock %}
