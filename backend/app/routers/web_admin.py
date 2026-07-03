@@ -315,6 +315,13 @@ def camera_page(request: Request, admin: Admin = Depends(require_admin_page)):
     return templates(request).TemplateResponse("camera.html", {"request": request, "admin": admin, "camera": camera_service.status()})
 
 
+@router.get("/admin/detection")
+def detection_page(request: Request, admin: Admin = Depends(require_admin_page)):
+    camera_service.start(door_id="door-01", recognition_enabled=True)
+    camera_service.enable_recognition(True, door_id="door-01")
+    return templates(request).TemplateResponse("detection.html", {"request": request, "admin": admin, "camera": camera_service.status()})
+
+
 @router.post("/admin/camera/start")
 def camera_start(door_id: str = Form("door-01"), recognize: str | None = Form(None), admin: Admin = Depends(require_admin_page)):
     camera_service.start(door_id=door_id, recognition_enabled=recognize == "on")

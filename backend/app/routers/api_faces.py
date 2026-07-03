@@ -37,6 +37,13 @@ def camera_stream() -> StreamingResponse:
     return StreamingResponse(camera_service.mjpeg_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
+@router.get("/detection/stream")
+def detection_stream(door_id: str = "door-01") -> StreamingResponse:
+    camera_service.start(door_id=door_id, recognition_enabled=True)
+    camera_service.enable_recognition(True, door_id=door_id)
+    return StreamingResponse(camera_service.detection_mjpeg_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
 @router.get("/camera/status")
 def camera_status() -> dict:
     return camera_service.status()

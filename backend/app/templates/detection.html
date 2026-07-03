@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="detection-screen">
+  <img src="/api/face/detection/stream?door_id={{ camera.door_id or 'door-01' }}" alt="Face detection stream">
+</div>
+{% endblock %}

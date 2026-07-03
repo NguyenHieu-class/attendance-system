@@ -23,6 +23,15 @@ class FaceResult:
     status: str
 
 
+@dataclass
+class DetectedFace:
+    user_id: int | None
+    full_name: str
+    confidence: float
+    status: str
+    bbox: tuple[int, int, int, int]
+
+
 class FaceService:
     def __init__(self) -> None:
         self.app = None
@@ -104,6 +113,25 @@ class FaceService:
         embedding = self.get_embedding(frame)
         if embedding is None:
             return FaceResult(None, None, 0.0, "unknown")
+        user, score = self._match_embedding(db, embedding)
+        if user and score >= threshold:
+            return FaceResult(user.id, user.full_name, score, "matched")
+        return FaceResult(None, None, score, "unknown")
+
+    def recognize_faces(self, db: Session, frame, threshold: float) -> list[DetectedFace]:
+        faces = self.detect_faces(frame)
+        results: list[DetectedFace] = []
+        for face in faces:
+            embedding = face.embedding.astype(float).tolist()
+            user, score = self._match_embedding(db, embedding)
+            x1, y1, x2, y2 = [int(v) for v in face.bbox]
+            if user and score >= threshold:
+                results.append(DetectedFace(user.id, user.full_name, score, "matched", (x1, y1, x2, y2)))
+            else:
+                results.append(DetectedFace(None, "unauthorized", max(score, 0.0), "unauthorized", (x1, y1, x2, y2)))
+        return results
+
+    def _match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
         best_user: User | None = None
         best_score = 0.0
         profiles = db.scalars(select(FaceProfile)).all()
@@ -125,9 +153,7 @@ class FaceService:
             if score > best_score:
                 best_score = score
                 best_user = user
-        if best_user and best_score >= threshold:
-            return FaceResult(best_user.id, best_user.full_name, best_score, "matched")
-        return FaceResult(None, None, best_score, "unknown")
+        return best_user, best_score
 
 
 face_service = FaceService()

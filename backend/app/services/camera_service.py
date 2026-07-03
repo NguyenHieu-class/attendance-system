@@ -6,6 +6,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 import cv2
+import numpy as np
 
 from app.config import get_settings
 from app.database import SessionLocal
@@ -26,8 +27,12 @@ class CameraService:
         self._door_id = "door-01"
         self._latest_frame = None
         self._latest_jpeg: bytes | None = None
+        self._detection_jpeg: bytes | None = None
+        self._detections: list[dict] = []
+        self._last_detection_at = 0.0
         self._last_recognize_at = 0.0
-        self._recognize_interval_sec = 2.0
+        self._recognize_interval_sec = 0.75
+        self._last_access_at_by_user: dict[int, float] = {}
         self._last_result: dict = {"status": "stopped"}
 
     def start(self, door_id: str = "door-01", recognition_enabled: bool = False) -> None:
@@ -77,9 +82,21 @@ class CameraService:
             yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
             time.sleep(0.05)
 
+    def detection_mjpeg_frames(self):
+        while True:
+            frame = self.get_detection_jpeg()
+            yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+            time.sleep(0.05)
+
     def get_jpeg(self) -> bytes | None:
         with self._lock:
             return self._latest_jpeg
+
+    def get_detection_jpeg(self) -> bytes:
+        with self._lock:
+            if self._detection_jpeg and time.time() - self._last_detection_at <= 2.0:
+                return self._detection_jpeg
+        return self._black_jpeg()
 
     def get_frame_copy(self):
         with self._lock:
@@ -109,6 +126,7 @@ class CameraService:
                 with self._lock:
                     self._latest_frame = frame
                     self._latest_jpeg = jpeg.tobytes()
+                    self._detection_jpeg = self._draw_cached_detections(preview, frame.shape[:2])
 
             if self._recognition_enabled and time.time() - self._last_recognize_at >= self._recognize_interval_sec:
                 self._last_recognize_at = time.time()
@@ -123,24 +141,29 @@ class CameraService:
         db = SessionLocal()
         try:
             setting = get_settings_for_door(db, self._door_id)
-            result = face_service.recognize_face(db, frame, setting.face_threshold)
+            detected_faces = face_service.recognize_faces(db, frame, setting.face_threshold)
             access = None
-            if result.user_id:
+            first_allowed = next((face for face in detected_faces if face.user_id), None)
+            if first_allowed and self._can_send_access(first_allowed.user_id, setting.anti_repeat_cooldown_sec):
                 access = asyncio.run(
                     evaluate_access(
                         db,
                         AccessEvent(
                             door_id=self._door_id,
                             method="face",
-                            user_id=result.user_id,
-                            confidence=result.confidence,
+                            user_id=first_allowed.user_id,
+                            confidence=first_allowed.confidence,
                         ),
                     )
                 )
+                self._last_access_at_by_user[first_allowed.user_id] = time.time()
+            detections = [asdict(face) for face in detected_faces]
             with self._lock:
+                self._detections = detections
+                self._last_detection_at = time.time() if detections else 0.0
                 self._last_result = {
-                    "status": result.status,
-                    "face": asdict(result),
+                    "status": "face_detected" if detections else "no_face",
+                    "faces": detections,
                     "access": access,
                     "recognized_at": datetime.now(timezone.utc).isoformat(),
                 }
@@ -151,6 +174,12 @@ class CameraService:
         finally:
             db.close()
 
+    def _can_send_access(self, user_id: int | None, cooldown_sec: int) -> bool:
+        if user_id is None:
+            return False
+        last = self._last_access_at_by_user.get(user_id, 0.0)
+        return time.time() - last >= max(cooldown_sec, 1)
+
     @staticmethod
     def _resize_for_preview(frame):
         height, width = frame.shape[:2]
@@ -158,6 +187,38 @@ class CameraService:
             return frame
         scale = 800 / float(width)
         return cv2.resize(frame, (800, int(height * scale)))
+
+    def _draw_cached_detections(self, preview, original_shape: tuple[int, int]) -> bytes | None:
+        if not self._detections or time.time() - self._last_detection_at > 2.0:
+            return None
+
+        annotated = preview.copy()
+        original_h, original_w = original_shape
+        preview_h, preview_w = annotated.shape[:2]
+        scale_x = preview_w / float(original_w)
+        scale_y = preview_h / float(original_h)
+
+        for face in self._detections:
+            x1, y1, x2, y2 = face["bbox"]
+            x1 = int(x1 * scale_x)
+            x2 = int(x2 * scale_x)
+            y1 = int(y1 * scale_y)
+            y2 = int(y2 * scale_y)
+            authorized = face["status"] == "matched"
+            color = (0, 220, 0) if authorized else (0, 0, 255)
+            label = face["full_name"] if authorized else "unauthorized"
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+            text_y = min(y2 + 24, preview_h - 8)
+            cv2.putText(annotated, label, (x1, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)
+
+        ok, jpeg = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        return jpeg.tobytes() if ok else None
+
+    @staticmethod
+    def _black_jpeg() -> bytes:
+        black = np.zeros((480, 800, 3), dtype=np.uint8)
+        ok, jpeg = cv2.imencode(".jpg", black, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        return jpeg.tobytes() if ok else b""
 
 
 camera_service = CameraService()
