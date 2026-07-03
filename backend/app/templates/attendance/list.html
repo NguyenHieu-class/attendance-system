@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between"><h1 class="h3">Attendance</h1><a class="btn btn-outline-secondary" href="/admin/export/attendance.csv">Export CSV</a></div>
+<table class="table table-sm"><tr><th>ID</th><th>User</th><th>Method</th><th>Event</th><th>Time</th></tr>
+{% for log in logs %}<tr><td>{{ log.id }}</td><td>{{ log.user_id }}</td><td>{{ log.method }}</td><td>{{ log.event_type }}</td><td>{{ log.created_at }}</td></tr>{% endfor %}
+</table>
+{% endblock %}

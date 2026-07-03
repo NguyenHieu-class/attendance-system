@@ -1,0 +1,13 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+jinja2==3.1.5
+python-multipart==0.0.20
+sqlalchemy==2.0.36
+pydantic-settings==2.7.1
+passlib[bcrypt]==1.7.4
+httpx==0.28.1
+numpy==2.2.1
+opencv-python==4.10.0.84
+# Install on Raspberry Pi when ready for real face recognition:
+# insightface==0.7.3
+# onnxruntime==1.20.1

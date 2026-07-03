@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+backend/attendance.db
+data/faces/*
+data/snapshots/*
+!data/faces/.gitkeep
+!data/snapshots/.gitkeep
+.pio/

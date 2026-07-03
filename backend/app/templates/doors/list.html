@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h3">Doors</h1>
+<table class="table">
+<tr><th>Door</th><th>Name</th><th>ESP32 URL</th><th>Status</th><th></th></tr>
+{% for door in doors %}
+<tr>
+  <td>{{ door.door_id }}</td><td>{{ door.door_name }}</td><td>{{ door.esp32_base_url }}</td><td>{{ door.status }}</td>
+  <td class="text-end">
+    <a class="btn btn-sm btn-outline-secondary" href="/admin/doors/{{ door.door_id }}/settings">Settings</a>
+    <form method="post" action="/admin/doors/{{ door.door_id }}/unlock" class="d-inline" onsubmit="return confirm('Unlock this door?')"><button class="btn btn-sm btn-danger">Unlock Door</button></form>
+  </td>
+</tr>
+{% endfor %}
+</table>
+{% endblock %}

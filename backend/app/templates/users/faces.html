@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h3">{{ user.full_name if user else "User" }}</h1>
+<p class="text-muted">Face enrollment UI is prepared as a post-MVP screen. NFC enrollment is active now.</p>
+<form method="post" action="/admin/users/{{ user.id }}/nfc/enroll" class="d-flex gap-2 align-items-end">
+  <div><label class="form-label">Door</label><input name="door_id" value="door-01" class="form-control"></div>
+  <button class="btn btn-primary">Start NFC enrollment</button>
+</form>
+{% endblock %}
