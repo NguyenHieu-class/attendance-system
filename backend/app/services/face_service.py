@@ -1,6 +1,7 @@
+import base64
 import json
 import logging
-from hashlib import sha256
+import pickle
 from dataclasses import dataclass
 
 import numpy as np
@@ -46,13 +47,26 @@ class FaceService:
     def get_embedding(self, frame) -> list[float] | None:
         faces = self.detect_faces(frame)
         if not faces:
-            if self.app is None:
+            if self.app is None and get_settings().face_allow_mock:
                 return self._mock_embedding(frame)
             return None
         return faces[0].embedding.astype(float).tolist()
 
     def is_mock_mode(self) -> bool:
-        return self.app is None
+        return self.app is None and get_settings().face_allow_mock
+
+    def is_ready(self) -> bool:
+        return self.app is not None or get_settings().face_allow_mock
+
+    def serialize_embedding(self, embedding: list[float]) -> str:
+        array = np.array(embedding, dtype=np.float32)
+        return "pickle:" + base64.b64encode(pickle.dumps(array)).decode("ascii")
+
+    def deserialize_embedding(self, stored: str) -> list[float]:
+        if stored.startswith("pickle:"):
+            raw = base64.b64decode(stored.removeprefix("pickle:"))
+            return pickle.loads(raw).astype(float).tolist()
+        return json.loads(stored)
 
     def _mock_embedding(self, frame) -> list[float]:
         # Keeps enrollment/test flows usable on machines without InsightFace.
@@ -64,8 +78,7 @@ class FaceService:
             gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
             values = gray.astype(np.float32).flatten()
         except Exception:
-            digest = sha256(str(frame).encode()).digest()
-            values = np.frombuffer(digest * 4, dtype=np.uint8).astype(np.float32)
+            values = np.zeros(128, dtype=np.float32)
         values = values[:128]
         if values.size < 128:
             values = np.pad(values, (0, 128 - values.size))
@@ -90,7 +103,7 @@ class FaceService:
             user = db.get(User, profile.user_id)
             if not user or user.status != "active":
                 continue
-            score = self.compare_embeddings(embedding, json.loads(profile.embedding))
+            score = self.compare_embeddings(embedding, self.deserialize_embedding(profile.embedding))
             if score > best_score:
                 best_score = score
                 best_user = user

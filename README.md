@@ -21,7 +21,7 @@ python ../scripts/create_admin.py
 
 Open `http://RASPBERRY_PI_IP:8000/login` from another device on the same LAN.
 
-For real face recognition, install InsightFace and ONNX Runtime on the Pi, then keep `FACE_MODEL_NAME=buffalo_s` or switch to another InsightFace model. The backend runs with a mock fallback when InsightFace is unavailable.
+For face recognition, install InsightFace and ONNX Runtime on the Pi, then keep `FACE_MODEL_NAME=buffalo_s` or switch to another InsightFace model. InsightFace is the primary engine. The mock fallback is disabled by default and only runs when `FACE_ALLOW_MOCK=true`.
 
 ## MVP Features
 
@@ -82,7 +82,7 @@ source .venv/bin/activate
 python ../scripts/test_camera.py
 ```
 
-Then open `http://RASPBERRY_PI_IP:8000/admin/camera`, start the camera, and enable live recognition. The backend reads frames from the USB webcam, recognizes faces against enrolled `face_profiles`, applies the selected door access mode, writes logs, and sends unlock commands to ESP32 when allowed.
+Open a user detail page and choose `Face/NFC` to enroll face profiles directly from the USB camera. Capture several directions: front, left, right, look up, and look down. Then open `http://RASPBERRY_PI_IP:8000/admin/camera`, start the camera, and enable live recognition. The backend reads frames from the USB webcam, recognizes faces against enrolled `face_profiles`, applies the selected door access mode, writes logs, and sends unlock commands to ESP32 when allowed.
 
 ## Backup
 

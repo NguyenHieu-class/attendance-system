@@ -7,9 +7,30 @@
 {% if message and message.startswith("face_saved_") %}
 <div class="alert alert-success">Da xu ly dang ky khuon mat: {{ message.replace("face_saved_", "luu ").replace("_failed_", ", loi ") }} anh.</div>
 {% endif %}
+{% if message and message.startswith("face_captured_") %}
+<div class="alert alert-success">Da chup va luu khuon mat: {{ message.replace("face_captured_", "") }}.</div>
+{% endif %}
+{% if message == "face_not_detected" %}
+<div class="alert alert-warning">Khong phat hien duoc khuon mat. Hay canh lai anh sang va nhin ro vao camera.</div>
+{% endif %}
+{% if message == "face_camera_not_ready" %}
+<div class="alert alert-warning">Camera chua san sang. Hay doi vai giay roi chup lai.</div>
+{% endif %}
 <div class="row g-4">
-  <div class="col-lg-6">
-    <h2 class="h5">Face enrollment</h2>
+  <div class="col-lg-7">
+    <h2 class="h5">Face enrollment by USB camera</h2>
+    <div class="camera-preview mb-3">
+      <img src="/api/face/camera/stream" alt="USB camera stream">
+    </div>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      {% for pose, label in [("front","Front"),("left","Left"),("right","Right"),("up","Look up"),("down","Look down")] %}
+      <form method="post" action="/admin/users/{{ user.id }}/faces/capture">
+        <input type="hidden" name="pose" value="{{ pose }}">
+        <button class="btn btn-outline-primary btn-sm">{{ label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    <h2 class="h6">Upload fallback</h2>
     <form method="post" action="/admin/users/{{ user.id }}/faces/enroll" enctype="multipart/form-data">
       <div class="mb-3">
         <label class="form-label">Face images</label>
@@ -26,7 +47,7 @@
       {% endfor %}
     </table>
   </div>
-  <div class="col-lg-6">
+  <div class="col-lg-5">
     <h2 class="h5">NFC enrollment</h2>
 <form method="post" action="/admin/users/{{ user.id }}/nfc/enroll" class="d-flex gap-2 align-items-end">
   <div><label class="form-label">Door</label><input name="door_id" value="door-01" class="form-control"></div>

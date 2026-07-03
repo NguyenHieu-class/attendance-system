@@ -81,6 +81,12 @@ class CameraService:
         with self._lock:
             return self._latest_jpeg
 
+    def get_frame_copy(self):
+        with self._lock:
+            if self._latest_frame is None:
+                return None
+            return self._latest_frame.copy()
+
     def _loop(self) -> None:
         settings = get_settings()
         self._capture = cv2.VideoCapture(settings.camera_index)

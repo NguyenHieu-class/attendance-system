@@ -1,6 +1,5 @@
 import csv
 import io
-import json
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime, time, timezone
@@ -193,7 +192,7 @@ async def face_enroll(
         db.add(
             FaceProfile(
                 user_id=user_id,
-                embedding=json.dumps(embedding),
+                embedding=face_service.serialize_embedding(embedding),
                 image_path=str(image_path),
                 model_name=f"{face_service.model_name}{'-mock' if face_service.is_mock_mode() else ''}",
                 quality_score=0.50 if face_service.is_mock_mode() else 1.0,
@@ -203,6 +202,45 @@ async def face_enroll(
     db.commit()
     message = f"face_saved_{saved}_failed_{failed}"
     return RedirectResponse(f"/admin/users/{user_id}/faces?message={message}", status_code=303)
+
+
+@router.post("/admin/users/{user_id}/faces/capture")
+def face_capture(
+    user_id: int,
+    pose: str = Form("front"),
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin_page),
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404)
+    if not camera_service.status()["running"]:
+        camera_service.start()
+    frame = camera_service.get_frame_copy()
+    if frame is None:
+        return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_camera_not_ready", status_code=303)
+    embedding = face_service.get_embedding(frame)
+    if embedding is None:
+        return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_not_detected", status_code=303)
+
+    import cv2
+
+    safe_pose = "".join(ch for ch in pose.lower() if ch.isalnum() or ch in ("-", "_"))[:32] or "face"
+    face_dir = get_settings().data_path / "faces" / str(user_id)
+    face_dir.mkdir(parents=True, exist_ok=True)
+    image_path = face_dir / f"{safe_pose}-{uuid4().hex}.jpg"
+    cv2.imwrite(str(image_path), frame)
+    db.add(
+        FaceProfile(
+            user_id=user_id,
+            embedding=face_service.serialize_embedding(embedding),
+            image_path=str(image_path),
+            model_name=f"{face_service.model_name}{'-mock' if face_service.is_mock_mode() else ''}",
+            quality_score=0.50 if face_service.is_mock_mode() else 1.0,
+        )
+    )
+    db.commit()
+    return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_captured_{safe_pose}", status_code=303)
 
 
 def _decode_image(content: bytes):

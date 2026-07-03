@@ -8,6 +8,5 @@ passlib[bcrypt]==1.7.4
 httpx==0.28.1
 numpy==2.2.1
 opencv-python==4.10.0.84
-# Install on Raspberry Pi when ready for real face recognition:
-# insightface==0.7.3
-# onnxruntime==1.20.1
+insightface==0.7.3
+onnxruntime==1.20.1
