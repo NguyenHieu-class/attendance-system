@@ -68,6 +68,12 @@ class FaceService:
             return pickle.loads(raw).astype(float).tolist()
         return json.loads(stored)
 
+    def embedding_dimension(self, stored: str) -> int:
+        try:
+            return len(self.deserialize_embedding(stored))
+        except Exception:
+            return 0
+
     def _mock_embedding(self, frame) -> list[float]:
         # Keeps enrollment/test flows usable on machines without InsightFace.
         resized = frame
@@ -89,6 +95,8 @@ class FaceService:
     def compare_embeddings(first: list[float], second: list[float]) -> float:
         a = np.array(first, dtype=np.float32)
         b = np.array(second, dtype=np.float32)
+        if a.shape != b.shape:
+            return -1.0
         denom = float(np.linalg.norm(a) * np.linalg.norm(b))
         return float(np.dot(a, b) / denom) if denom else 0.0
 
@@ -103,7 +111,17 @@ class FaceService:
             user = db.get(User, profile.user_id)
             if not user or user.status != "active":
                 continue
-            score = self.compare_embeddings(embedding, self.deserialize_embedding(profile.embedding))
+            stored_embedding = self.deserialize_embedding(profile.embedding)
+            score = self.compare_embeddings(embedding, stored_embedding)
+            if score < 0:
+                logger.warning(
+                    "Skipping incompatible face profile id=%s user_id=%s dim=%s expected=%s",
+                    profile.id,
+                    profile.user_id,
+                    len(stored_embedding),
+                    len(embedding),
+                )
+                continue
             if score > best_score:
                 best_score = score
                 best_user = user

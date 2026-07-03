@@ -16,6 +16,9 @@
 {% if message == "face_camera_not_ready" %}
 <div class="alert alert-warning">Camera chua san sang. Hay doi vai giay roi chup lai.</div>
 {% endif %}
+{% if message == "face_deleted" %}
+<div class="alert alert-success">Da xoa face profile.</div>
+{% endif %}
 <div class="row g-4">
   <div class="col-lg-7">
     <h2 class="h5">Face enrollment by USB camera</h2>
@@ -39,11 +42,26 @@
       <button class="btn btn-primary">Enroll face</button>
     </form>
     <table class="table table-sm mt-3">
-      <tr><th>ID</th><th>Model</th><th>Quality</th><th>Created</th></tr>
-      {% for profile in face_profiles %}
-      <tr><td>{{ profile.id }}</td><td>{{ profile.model_name }}</td><td>{{ profile.quality_score or "" }}</td><td>{{ profile.created_at }}</td></tr>
+      <tr><th>ID</th><th>Model</th><th>Dim</th><th>Quality</th><th>Created</th><th></th></tr>
+      {% for row in face_profile_rows %}
+      {% set profile = row.profile %}
+      <tr>
+        <td>{{ profile.id }}</td>
+        <td>{{ profile.model_name }}</td>
+        <td>
+          {{ row.dimension }}
+          {% if row.dimension != 512 %}<span class="badge text-bg-warning">re-enroll</span>{% endif %}
+        </td>
+        <td>{{ profile.quality_score or "" }}</td>
+        <td>{{ profile.created_at }}</td>
+        <td class="text-end">
+          <form method="post" action="/admin/users/{{ user.id }}/faces/{{ profile.id }}/delete" onsubmit="return confirm('Delete this face profile?')">
+            <button class="btn btn-sm btn-outline-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
       {% else %}
-      <tr><td colspan="4" class="text-muted">No face profiles enrolled yet.</td></tr>
+      <tr><td colspan="6" class="text-muted">No face profiles enrolled yet.</td></tr>
       {% endfor %}
     </table>
   </div>

@@ -156,8 +156,9 @@ def faces_stub(user_id: int, request: Request, db: Session = Depends(get_db), ad
         raise HTTPException(404)
     cards = db.scalars(select(NfcCard).where(NfcCard.user_id == user_id).order_by(NfcCard.created_at.desc())).all()
     face_profiles = db.scalars(select(FaceProfile).where(FaceProfile.user_id == user_id).order_by(FaceProfile.created_at.desc())).all()
+    face_profile_rows = [{"profile": profile, "dimension": face_service.embedding_dimension(profile.embedding)} for profile in face_profiles]
     pending = db.scalar(select(NfcEnrollment).where(NfcEnrollment.user_id == user_id, NfcEnrollment.active.is_(True)).order_by(NfcEnrollment.created_at.desc()))
-    return templates(request).TemplateResponse("users/faces.html", {"request": request, "admin": admin, "user": user, "cards": cards, "face_profiles": face_profiles, "pending": pending, "message": request.query_params.get("message")})
+    return templates(request).TemplateResponse("users/faces.html", {"request": request, "admin": admin, "user": user, "cards": cards, "face_profile_rows": face_profile_rows, "pending": pending, "message": request.query_params.get("message")})
 
 
 @router.post("/admin/users/{user_id}/faces/enroll")
@@ -241,6 +242,20 @@ def face_capture(
     )
     db.commit()
     return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_captured_{safe_pose}", status_code=303)
+
+
+@router.post("/admin/users/{user_id}/faces/{profile_id}/delete")
+def delete_face_profile(
+    user_id: int,
+    profile_id: int,
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin_page),
+):
+    profile = db.get(FaceProfile, profile_id)
+    if profile and profile.user_id == user_id:
+        db.delete(profile)
+        db.commit()
+    return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_deleted", status_code=303)
 
 
 def _decode_image(content: bytes):
