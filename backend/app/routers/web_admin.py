@@ -2,7 +2,7 @@ import csv
 import io
 from pathlib import Path
 from uuid import uuid4
-from datetime import datetime, time, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
@@ -21,7 +21,7 @@ from app.models.nfc_enrollment import NfcEnrollment
 from app.models.student import Student
 from app.security import authenticate_admin, clear_session, create_session, get_current_admin, require_admin_page
 from app.services.access_policy_service import AccessEvent, evaluate_access
-from app.services.attendance_service import get_daily_attendance_summary
+from app.services.attendance_service import day_bounds, get_daily_attendance_summary
 from app.services.camera_service import camera_service
 from app.services.door_service import ensure_default_door, get_settings_for_door
 from app.services.face_service import face_service
@@ -64,12 +64,19 @@ def logout():
 @router.get("/admin")
 def dashboard(request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
     ensure_default_door(db)
-    today = datetime.combine(datetime.now().date(), time.min).replace(tzinfo=timezone.utc)
+    today, _ = day_bounds(datetime.now())
     data = {
         "request": request,
         "admin": admin,
         "active_students": db.scalar(select(func.count()).select_from(Student).where(Student.status == "active")) or 0,
-        "attendance_today": db.scalar(select(func.count()).select_from(AttendanceLog).where(AttendanceLog.created_at >= today)) or 0,
+        "attendance_today": db.scalar(
+            select(func.count(func.distinct(AttendanceLog.student_id))).where(
+                AttendanceLog.created_at >= today,
+                AttendanceLog.event_type == "check_in",
+                AttendanceLog.student_id.is_not(None),
+            )
+        )
+        or 0,
         "access_today": db.scalar(select(func.count()).select_from(AccessLog).where(AccessLog.created_at >= today, AccessLog.result == "allowed")) or 0,
         "denied_today": db.scalar(select(func.count()).select_from(AccessLog).where(AccessLog.created_at >= today, AccessLog.result == "denied")) or 0,
         "doors": db.scalars(select(Door)).all(),

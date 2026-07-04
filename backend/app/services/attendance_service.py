@@ -1,4 +1,4 @@
-from datetime import datetime, time, timezone
+from datetime import datetime, time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,19 +15,14 @@ def record_attendance(
     nfc_uid_hash: str | None = None,
     door_id: str | None = None,
 ) -> AttendanceLog | None:
-    start = datetime.combine(datetime.now().date(), time.min).replace(tzinfo=timezone.utc)
-    logs = db.scalars(
+    now = datetime.now()
+    start, end = day_bounds(now)
+    latest_log = db.scalars(
         select(AttendanceLog)
-        .where(AttendanceLog.student_id == student_id, AttendanceLog.created_at >= start)
-        .order_by(AttendanceLog.created_at.asc())
-    ).all()
-    types = {log.event_type for log in logs}
-    if "check_in" not in types:
-        event_type = "check_in"
-    elif "check_out" not in types:
-        event_type = "check_out"
-    else:
-        return None
+        .where(AttendanceLog.student_id == student_id, AttendanceLog.created_at >= start, AttendanceLog.created_at <= end)
+        .order_by(AttendanceLog.created_at.desc())
+    ).first()
+    event_type = "check_out" if latest_log and latest_log.event_type == "check_in" else "check_in"
     log = AttendanceLog(
         student_id=student_id,
         method=method,
@@ -35,6 +30,7 @@ def record_attendance(
         confidence=confidence,
         nfc_uid_hash=nfc_uid_hash,
         door_id=door_id,
+        created_at=now,
     )
     db.add(log)
     db.commit()
@@ -44,8 +40,8 @@ def record_attendance(
 
 def day_bounds(day: datetime | None = None) -> tuple[datetime, datetime]:
     target = (day or datetime.now()).date()
-    start = datetime.combine(target, time.min).replace(tzinfo=timezone.utc)
-    end = datetime.combine(target, time.max).replace(tzinfo=timezone.utc)
+    start = datetime.combine(target, time.min)
+    end = datetime.combine(target, time.max)
     return start, end
 
 
