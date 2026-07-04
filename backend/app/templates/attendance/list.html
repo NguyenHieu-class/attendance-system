@@ -52,7 +52,19 @@
 </table>
 
 <h2 class="h5 mt-4">Log diem danh</h2>
-<table class="table table-sm"><tr><th>ID</th><th>Sinh vien</th><th>Phuong thuc</th><th>Su kien</th><th>Thoi gian</th></tr>
-{% for log in logs %}<tr><td>{{ log.id }}</td><td>{{ log.student_id }}</td><td>{{ log.method }}</td><td>{{ log.event_type }}</td><td>{{ log.created_at }}</td></tr>{% endfor %}
+<table class="table table-sm">
+  <tr><th>STT</th><th>Ma sinh vien</th><th>Ho va ten</th><th>Phuong thuc</th><th>Su kien</th><th>Thoi gian</th></tr>
+  {% for row in log_rows %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td>{{ row.student_code }}</td>
+    <td>{{ row.full_name }}</td>
+    <td>{{ row.method }}</td>
+    <td>{{ row.event_type }}</td>
+    <td>{{ row.created_at }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="text-muted">Chua co log diem danh.</td></tr>
+  {% endfor %}
 </table>
 {% endblock %}

@@ -300,13 +300,25 @@ def delete_nfc_card(
 @router.get("/admin/attendance")
 def attendance(request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
     logs = db.scalars(select(AttendanceLog).order_by(AttendanceLog.created_at.desc()).limit(200)).all()
+    log_rows = []
+    for log in logs:
+        student = db.get(Student, log.student_id) if log.student_id else None
+        log_rows.append(
+            {
+                "student_code": student.student_code if student else "",
+                "full_name": student.full_name if student else "Khong xac dinh",
+                "method": log.method,
+                "event_type": log.event_type,
+                "created_at": log.created_at,
+            }
+        )
     summary = get_daily_attendance_summary(db)
     return templates(request).TemplateResponse(
         "attendance/list.html",
         {
             "request": request,
             "admin": admin,
-            "logs": logs,
+            "log_rows": log_rows,
             "people_inside": summary["people_inside"],
             "people_out": summary["people_out"],
             "attended_count": summary["attended_count"],

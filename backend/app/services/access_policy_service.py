@@ -60,8 +60,10 @@ async def evaluate_access(db: Session, event: AccessEvent, dispatch_unlock: bool
         else:
             reason = "nfc_not_allowed_in_mode"
 
-    if allowed and event.student_id and event.method in ("face", "nfc"):
-        record_attendance(db, event.student_id, source, event.confidence, event.nfc_uid_hash, event.door_id)
+    attendance_log = None
+    should_record_attendance = not (setting.access_mode == "face_and_nfc" and reason == "dual_auth_allowed")
+    if student and event.method in ("face", "nfc") and should_record_attendance:
+        attendance_log = record_attendance(db, student.id, source, event.confidence, event.nfc_uid_hash, event.door_id)
 
     log = AccessLog(
         student_id=event.student_id,
@@ -126,6 +128,7 @@ async def evaluate_access(db: Session, event: AccessEvent, dispatch_unlock: bool
         "should_unlock": should_unlock,
         "unlock_sent": unlock_sent,
         "notify_sent": notify_sent,
+        "attendance_event_type": attendance_log.event_type if attendance_log else None,
     }
 
 
