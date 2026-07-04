@@ -146,8 +146,8 @@ void handleUnlock() {
   }
   int duration = doc["duration_ms"] | unlockDurationMs;
   String fullName = doc["full_name"] | "";
-  String employeeCode = doc["employee_code"] | "";
-  showOpen(fullName, employeeCode);
+  String studentCode = doc["student_code"] | doc["employee_code"] | "";
+  showOpen(fullName, studentCode);
   server.send(200, "application/json", "{\"ok\":true}");
   localUnlock(duration);
 }
@@ -167,7 +167,7 @@ void handleNotify() {
   }
   String status = doc["status"] | "";
   String fullName = doc["full_name"] | "";
-  String employeeCode = doc["employee_code"] | "";
+  String employeeCode = doc["student_code"] | doc["employee_code"] | "";
   if (status == "waiting") {
     showWaiting(fullName, employeeCode);
     beepWaiting();
@@ -211,8 +211,8 @@ void readNfc() {
     JsonDocument res;
     deserializeJson(res, response);
     String reason = res["reason"] | "";
-    String fullName = res["user"]["full_name"] | "";
-    String employeeCode = res["user"]["employee_code"] | "";
+    String fullName = res["student"]["full_name"] | res["user"]["full_name"] | "";
+    String employeeCode = res["student"]["student_code"] | res["user"]["employee_code"] | "";
     if (res["should_unlock"] == true) {
       showOpen(fullName, employeeCode);
       localUnlock(unlockDurationMs);

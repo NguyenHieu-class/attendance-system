@@ -62,9 +62,9 @@ async def unlock_door(
     db: Session,
     door_id: str,
     source: str,
-    user_id: int | None = None,
+    student_id: int | None = None,
     full_name: str | None = None,
-    employee_code: str | None = None,
+    student_code: str | None = None,
 ) -> bool:
     door = db.scalar(select(Door).where(Door.door_id == door_id))
     if not door:
@@ -75,7 +75,7 @@ async def unlock_door(
     if last and now - last < timedelta(seconds=setting.anti_repeat_cooldown_sec):
         return True
     _last_unlock_at[door_id] = now
-    return await Esp32Client().unlock(door, setting.unlock_duration_ms, source, user_id, full_name, employee_code)
+    return await Esp32Client().unlock(door, setting.unlock_duration_ms, source, student_id, full_name, student_code)
 
 
 async def notify_door(
@@ -84,9 +84,9 @@ async def notify_door(
     status: str,
     reason: str,
     full_name: str | None = None,
-    employee_code: str | None = None,
+    student_code: str | None = None,
 ) -> bool:
     door = db.scalar(select(Door).where(Door.door_id == door_id))
     if not door:
         return False
-    return await Esp32Client().notify(door, status, reason, full_name, employee_code)
+    return await Esp32Client().notify(door, status, reason, full_name, student_code)

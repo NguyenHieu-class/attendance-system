@@ -18,7 +18,7 @@ def _log_face_denied(
 ) -> None:
     db.add(
         AccessLog(
-            user_id=None,
+            student_id=None,
             door_id=door_id,
             method="face",
             result="denied",
@@ -56,8 +56,8 @@ def process_face_access(db: Session, frame, door_id: str, dispatch_unlock: bool 
             }
 
     embedding = face.embedding.astype(float).tolist()
-    user, confidence = face_service.match_embedding(db, embedding)
-    if not user or confidence < setting.face_threshold:
+    student, confidence = face_service.match_embedding(db, embedding)
+    if not student or confidence < setting.face_threshold:
         _log_face_denied(db, door_id, "unknown_face", confidence, liveness_result)
         return {
             "allowed": False,
@@ -70,7 +70,7 @@ def process_face_access(db: Session, frame, door_id: str, dispatch_unlock: bool 
     access = _run_policy(
         db,
         door_id,
-        user.id,
+        student.id,
         confidence,
         liveness_result,
         dispatch_unlock,
@@ -109,24 +109,24 @@ async def process_face_access_async(db: Session, frame, door_id: str, dispatch_u
                 if first_spoof is None:
                     first_spoof = liveness_result
                 continue
-        user, confidence = face_service.match_embedding(db, face.embedding.astype(float).tolist())
+        student, confidence = face_service.match_embedding(db, face.embedding.astype(float).tolist())
         x1, y1, x2, y2 = [int(v) for v in face.bbox]
-        if user and confidence >= setting.face_threshold:
-            detections.append(DetectedFace(user.id, user.full_name, confidence, "matched", (x1, y1, x2, y2)))
+        if student and confidence >= setting.face_threshold:
+            detections.append(DetectedFace(student.id, student.full_name, confidence, "matched", (x1, y1, x2, y2)))
             if first_live_match is None:
-                first_live_match = (user, confidence)
+                first_live_match = (student, confidence)
                 first_liveness = liveness_result
         else:
             detections.append(DetectedFace(None, "unauthorized", max(confidence, 0.0), "unauthorized", (x1, y1, x2, y2)))
 
     if first_live_match:
-        user, confidence = first_live_match
+        student, confidence = first_live_match
         access = await evaluate_access(
             db,
             AccessEvent(
                 door_id=door_id,
                 method="face",
-                user_id=user.id,
+                student_id=student.id,
                 confidence=confidence,
                 liveness_score=first_liveness.score if first_liveness else None,
                 spoof_result=first_liveness.label if first_liveness else None,
@@ -153,7 +153,7 @@ async def process_face_access_async(db: Session, frame, door_id: str, dispatch_u
 def _run_policy(
     db: Session,
     door_id: str,
-    user_id: int,
+    student_id: int,
     confidence: float,
     liveness_result: LivenessResult | None,
     dispatch_unlock: bool,
@@ -166,7 +166,7 @@ def _run_policy(
             AccessEvent(
                 door_id=door_id,
                 method="face",
-                user_id=user_id,
+                student_id=student_id,
                 confidence=confidence,
                 liveness_score=liveness_result.score if liveness_result else None,
                 spoof_result=liveness_result.label if liveness_result else None,

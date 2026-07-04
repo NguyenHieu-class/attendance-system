@@ -18,9 +18,10 @@ from app.models.door import Door, DoorSetting
 from app.models.face_profile import FaceProfile
 from app.models.nfc_card import NfcCard
 from app.models.nfc_enrollment import NfcEnrollment
-from app.models.user import User
+from app.models.student import Student
 from app.security import authenticate_admin, clear_session, create_session, get_current_admin, require_admin_page
 from app.services.access_policy_service import AccessEvent, evaluate_access
+from app.services.attendance_service import get_daily_attendance_summary
 from app.services.camera_service import camera_service
 from app.services.door_service import ensure_default_door, get_settings_for_door
 from app.services.face_service import face_service
@@ -67,7 +68,7 @@ def dashboard(request: Request, db: Session = Depends(get_db), admin: Admin = De
     data = {
         "request": request,
         "admin": admin,
-        "active_users": db.scalar(select(func.count()).select_from(User).where(User.status == "active")) or 0,
+        "active_students": db.scalar(select(func.count()).select_from(Student).where(Student.status == "active")) or 0,
         "attendance_today": db.scalar(select(func.count()).select_from(AttendanceLog).where(AttendanceLog.created_at >= today)) or 0,
         "access_today": db.scalar(select(func.count()).select_from(AccessLog).where(AccessLog.created_at >= today, AccessLog.result == "allowed")) or 0,
         "denied_today": db.scalar(select(func.count()).select_from(AccessLog).where(AccessLog.created_at >= today, AccessLog.result == "denied")) or 0,
@@ -76,104 +77,109 @@ def dashboard(request: Request, db: Session = Depends(get_db), admin: Admin = De
     return templates(request).TemplateResponse("dashboard.html", data)
 
 
-@router.get("/admin/users")
-def users(request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    rows = db.scalars(select(User).order_by(User.id.desc())).all()
-    return templates(request).TemplateResponse("users/list.html", {"request": request, "admin": admin, "users": rows})
+@router.get("/admin/students")
+def students(request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+    rows = db.scalars(select(Student).order_by(Student.id.desc())).all()
+    return templates(request).TemplateResponse("students/list.html", {"request": request, "admin": admin, "students": rows})
 
 
-@router.get("/admin/users/new")
-def new_user(request: Request, admin: Admin = Depends(require_admin_page)):
-    return templates(request).TemplateResponse("users/form.html", {"request": request, "admin": admin, "user": None})
+@router.get("/admin/students/new")
+def new_student(request: Request, admin: Admin = Depends(require_admin_page)):
+    return templates(request).TemplateResponse("students/form.html", {"request": request, "admin": admin, "student": None})
 
 
-@router.post("/admin/users")
-def create_user(
-    employee_code: str = Form(...),
+@router.post("/admin/students")
+def create_student(
+    student_code: str = Form(...),
     full_name: str = Form(...),
-    department: str = Form(""),
-    position: str = Form(""),
+    faculty: str = Form(""),
+    class_name: str = Form(""),
+    major: str = Form(""),
     email: str = Form(""),
     phone: str = Form(""),
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin_page),
 ):
-    db.add(User(employee_code=employee_code, full_name=full_name, department=department or None, position=position or None, email=email or None, phone=phone or None))
+    db.add(Student(student_code=student_code, full_name=full_name, faculty=faculty or None, class_name=class_name or None, major=major or None, email=email or None, phone=phone or None))
     db.commit()
-    return RedirectResponse("/admin/users", status_code=303)
+    return RedirectResponse("/admin/students", status_code=303)
 
 
-@router.get("/admin/users/{user_id}")
-def edit_user_page(user_id: int, request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    user = db.get(User, user_id)
-    if not user:
+@router.get("/admin/students/{student_id}")
+def edit_student_page(student_id: int, request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+    student = db.get(Student, student_id)
+    if not student:
         raise HTTPException(404)
-    return templates(request).TemplateResponse("users/form.html", {"request": request, "admin": admin, "user": user})
+    return templates(request).TemplateResponse("students/form.html", {"request": request, "admin": admin, "student": student})
 
 
-@router.post("/admin/users/{user_id}/edit")
-def edit_user(user_id: int, employee_code: str = Form(...), full_name: str = Form(...), department: str = Form(""), position: str = Form(""), email: str = Form(""), phone: str = Form(""), status: str = Form("active"), db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    user = db.get(User, user_id)
-    if not user:
+@router.post("/admin/students/{student_id}/edit")
+def edit_student(student_id: int, student_code: str = Form(...), full_name: str = Form(...), faculty: str = Form(""), class_name: str = Form(""), major: str = Form(""), email: str = Form(""), phone: str = Form(""), status: str = Form("active"), db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+    student = db.get(Student, student_id)
+    if not student:
         raise HTTPException(404)
-    user.employee_code = employee_code
-    user.full_name = full_name
-    user.department = department or None
-    user.position = position or None
-    user.email = email or None
-    user.phone = phone or None
-    user.status = status
+    student.student_code = student_code
+    student.full_name = full_name
+    student.faculty = faculty or None
+    student.class_name = class_name or None
+    student.major = major or None
+    student.email = email or None
+    student.phone = phone or None
+    student.status = status
+    student.is_active = status == "active"
     db.commit()
-    return RedirectResponse("/admin/users", status_code=303)
+    return RedirectResponse("/admin/students", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/disable")
-def disable_user(user_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    user = db.get(User, user_id)
-    if user:
-        user.status = "inactive"
+@router.post("/admin/students/{student_id}/disable")
+def disable_student(student_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+    student = db.get(Student, student_id)
+    if student:
+        student.status = "inactive"
+        student.is_active = False
         db.commit()
-    return RedirectResponse("/admin/users", status_code=303)
+    return RedirectResponse("/admin/students", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/delete")
-def delete_user(user_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    user = db.get(User, user_id)
-    if user:
-        has_logs = db.scalar(select(func.count()).select_from(AttendanceLog).where(AttendanceLog.user_id == user_id)) or db.scalar(select(func.count()).select_from(AccessLog).where(AccessLog.user_id == user_id))
+@router.post("/admin/students/{student_id}/delete")
+def delete_student(student_id: int, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+    student = db.get(Student, student_id)
+    if student:
+        has_logs = db.scalar(select(func.count()).select_from(AttendanceLog).where(AttendanceLog.student_id == student_id)) or db.scalar(select(func.count()).select_from(AccessLog).where(AccessLog.student_id == student_id))
         if has_logs:
-            user.status = "inactive"
+            student.status = "inactive"
+            student.is_active = False
         else:
-            db.delete(user)
+            db.delete(student)
         db.commit()
-    return RedirectResponse("/admin/users", status_code=303)
+    return RedirectResponse("/admin/students", status_code=303)
 
 
-@router.get("/admin/users/{user_id}/faces")
-def faces_stub(user_id: int, request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    user = db.get(User, user_id)
-    if not user:
+@router.get("/admin/students/{student_id}/faces")
+def faces_stub(student_id: int, request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+    student = db.get(Student, student_id)
+    if not student:
         raise HTTPException(404)
-    cards = db.scalars(select(NfcCard).where(NfcCard.user_id == user_id).order_by(NfcCard.created_at.desc())).all()
-    face_profiles = db.scalars(select(FaceProfile).where(FaceProfile.user_id == user_id).order_by(FaceProfile.created_at.desc())).all()
+    cards = db.scalars(select(NfcCard).where(NfcCard.student_id == student_id).order_by(NfcCard.created_at.desc())).all()
+    face_profiles = db.scalars(select(FaceProfile).where(FaceProfile.student_id == student_id).order_by(FaceProfile.created_at.desc())).all()
     face_profile_rows = [{"profile": profile, "dimension": face_service.embedding_dimension(profile.embedding)} for profile in face_profiles]
-    pending = db.scalar(select(NfcEnrollment).where(NfcEnrollment.user_id == user_id, NfcEnrollment.active.is_(True)).order_by(NfcEnrollment.created_at.desc()))
-    return templates(request).TemplateResponse("users/faces.html", {"request": request, "admin": admin, "user": user, "cards": cards, "face_profile_rows": face_profile_rows, "pending": pending, "message": request.query_params.get("message")})
+    pending = db.scalar(select(NfcEnrollment).where(NfcEnrollment.student_id == student_id, NfcEnrollment.active.is_(True)).order_by(NfcEnrollment.created_at.desc()))
+    return templates(request).TemplateResponse("students/faces.html", {"request": request, "admin": admin, "student": student, "cards": cards, "face_profile_rows": face_profile_rows, "pending": pending, "message": request.query_params.get("message")})
 
 
-@router.post("/admin/users/{user_id}/faces/enroll")
+@router.post("/admin/students/{student_id}/faces/enroll")
 async def face_enroll(
-    user_id: int,
+    student_id: int,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin_page),
 ):
-    user = db.get(User, user_id)
-    if not user:
+    student = db.get(Student, student_id)
+    if not student:
         raise HTTPException(404)
     saved = 0
     failed = 0
-    face_dir = get_settings().data_path / "faces" / str(user_id)
+    face_dir = get_settings().data_path / "faces" / str(student_id)
     face_dir.mkdir(parents=True, exist_ok=True)
     for upload in files[:5]:
         content = await upload.read()
@@ -192,7 +198,7 @@ async def face_enroll(
         image_path.write_bytes(content)
         db.add(
             FaceProfile(
-                user_id=user_id,
+                student_id=student_id,
                 embedding=face_service.serialize_embedding(embedding),
                 image_path=str(image_path),
                 model_name=f"{face_service.model_name}{'-mock' if face_service.is_mock_mode() else ''}",
@@ -202,38 +208,38 @@ async def face_enroll(
         saved += 1
     db.commit()
     message = f"face_saved_{saved}_failed_{failed}"
-    return RedirectResponse(f"/admin/users/{user_id}/faces?message={message}", status_code=303)
+    return RedirectResponse(f"/admin/students/{student_id}/faces?message={message}", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/faces/capture")
+@router.post("/admin/students/{student_id}/faces/capture")
 def face_capture(
-    user_id: int,
+    student_id: int,
     pose: str = Form("front"),
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin_page),
 ):
-    user = db.get(User, user_id)
-    if not user:
+    student = db.get(Student, student_id)
+    if not student:
         raise HTTPException(404)
     if not camera_service.status()["running"]:
         camera_service.start()
     frame = camera_service.get_frame_copy()
     if frame is None:
-        return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_camera_not_ready", status_code=303)
+        return RedirectResponse(f"/admin/students/{student_id}/faces?message=face_camera_not_ready", status_code=303)
     embedding = face_service.get_embedding(frame)
     if embedding is None:
-        return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_not_detected", status_code=303)
+        return RedirectResponse(f"/admin/students/{student_id}/faces?message=face_not_detected", status_code=303)
 
     import cv2
 
     safe_pose = "".join(ch for ch in pose.lower() if ch.isalnum() or ch in ("-", "_"))[:32] or "face"
-    face_dir = get_settings().data_path / "faces" / str(user_id)
+    face_dir = get_settings().data_path / "faces" / str(student_id)
     face_dir.mkdir(parents=True, exist_ok=True)
     image_path = face_dir / f"{safe_pose}-{uuid4().hex}.jpg"
     cv2.imwrite(str(image_path), frame)
     db.add(
         FaceProfile(
-            user_id=user_id,
+            student_id=student_id,
             embedding=face_service.serialize_embedding(embedding),
             image_path=str(image_path),
             model_name=f"{face_service.model_name}{'-mock' if face_service.is_mock_mode() else ''}",
@@ -241,21 +247,21 @@ def face_capture(
         )
     )
     db.commit()
-    return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_captured_{safe_pose}", status_code=303)
+    return RedirectResponse(f"/admin/students/{student_id}/faces?message=face_captured_{safe_pose}", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/faces/{profile_id}/delete")
+@router.post("/admin/students/{student_id}/faces/{profile_id}/delete")
 def delete_face_profile(
-    user_id: int,
+    student_id: int,
     profile_id: int,
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin_page),
 ):
     profile = db.get(FaceProfile, profile_id)
-    if profile and profile.user_id == user_id:
+    if profile and profile.student_id == student_id:
         db.delete(profile)
         db.commit()
-    return RedirectResponse(f"/admin/users/{user_id}/faces?message=face_deleted", status_code=303)
+    return RedirectResponse(f"/admin/students/{student_id}/faces?message=face_deleted", status_code=303)
 
 
 def _decode_image(content: bytes):
@@ -268,33 +274,45 @@ def _decode_image(content: bytes):
         return None
 
 
-@router.post("/admin/users/{user_id}/nfc/enroll")
-def nfc_enroll(user_id: int, door_id: str = Form("door-01"), db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    user = db.get(User, user_id)
-    if not user:
+@router.post("/admin/students/{student_id}/nfc/enroll")
+def nfc_enroll(student_id: int, door_id: str = Form("door-01"), db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+    student = db.get(Student, student_id)
+    if not student:
         raise HTTPException(404)
-    start_enrollment(db, door_id, user_id)
-    return RedirectResponse(f"/admin/users/{user_id}/faces?message=nfc_waiting", status_code=303)
+    start_enrollment(db, door_id, student_id)
+    return RedirectResponse(f"/admin/students/{student_id}/faces?message=nfc_waiting", status_code=303)
 
 
-@router.post("/admin/users/{user_id}/nfc/{card_id}/delete")
+@router.post("/admin/students/{student_id}/nfc/{card_id}/delete")
 def delete_nfc_card(
-    user_id: int,
+    student_id: int,
     card_id: int,
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_admin_page),
 ):
     card = db.get(NfcCard, card_id)
-    if card and card.user_id == user_id:
+    if card and card.student_id == student_id:
         db.delete(card)
         db.commit()
-    return RedirectResponse(f"/admin/users/{user_id}/faces?message=nfc_deleted", status_code=303)
+    return RedirectResponse(f"/admin/students/{student_id}/faces?message=nfc_deleted", status_code=303)
 
 
 @router.get("/admin/attendance")
 def attendance(request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
     logs = db.scalars(select(AttendanceLog).order_by(AttendanceLog.created_at.desc()).limit(200)).all()
-    return templates(request).TemplateResponse("attendance/list.html", {"request": request, "admin": admin, "logs": logs})
+    summary = get_daily_attendance_summary(db)
+    return templates(request).TemplateResponse(
+        "attendance/list.html",
+        {
+            "request": request,
+            "admin": admin,
+            "logs": logs,
+            "people_inside": summary["people_inside"],
+            "people_out": summary["people_out"],
+            "attended_count": summary["attended_count"],
+            "attendance_rows": summary["rows"],
+        },
+    )
 
 
 @router.get("/admin/access-logs")
@@ -391,10 +409,10 @@ def csv_response(filename: str, rows: list, fields: list[str]) -> StreamingRespo
 @router.get("/admin/export/attendance.csv")
 def export_attendance(db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
     rows = db.scalars(select(AttendanceLog).order_by(AttendanceLog.created_at.desc())).all()
-    return csv_response("attendance.csv", rows, ["id", "user_id", "method", "event_type", "created_at"])
+    return csv_response("attendance.csv", rows, ["id", "student_id", "method", "event_type", "created_at"])
 
 
 @router.get("/admin/export/access_logs.csv")
 def export_access_logs(db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
     rows = db.scalars(select(AccessLog).order_by(AccessLog.created_at.desc())).all()
-    return csv_response("access_logs.csv", rows, ["id", "user_id", "door_id", "method", "result", "reason", "confidence", "liveness_score", "spoof_result", "created_at"])
+    return csv_response("access_logs.csv", rows, ["id", "student_id", "door_id", "method", "result", "reason", "confidence", "liveness_score", "spoof_result", "created_at"])

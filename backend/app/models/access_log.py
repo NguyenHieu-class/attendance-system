@@ -10,7 +10,7 @@ class AccessLog(Base):
     __tablename__ = "access_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id"), nullable=True, index=True)
     door_id: Mapped[str] = mapped_column(String(64), index=True)
     method: Mapped[str] = mapped_column(String(32), index=True)
     result: Mapped[str] = mapped_column(String(32), index=True)

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h3">{{ student.full_name if student else "Sinh vien" }}</h1>
+{% if message == "nfc_waiting" or pending %}
+<div class="alert alert-info">Dang cho quet the NFC tren {{ pending.door_id if pending else "door-01" }}. Hay dua the vao dau doc ESP32.</div>
+{% endif %}
+{% if message and message.startswith("face_saved_") %}
+<div class="alert alert-success">Da xu ly dang ky khuon mat: {{ message.replace("face_saved_", "luu ").replace("_failed_", ", loi ") }} anh.</div>
+{% endif %}
+{% if message and message.startswith("face_captured_") %}
+<div class="alert alert-success">Da chup va luu khuon mat: {{ message.replace("face_captured_", "") }}.</div>
+{% endif %}
+{% if message == "face_not_detected" %}
+<div class="alert alert-warning">Khong phat hien duoc khuon mat. Hay canh lai anh sang va nhin ro vao camera.</div>
+{% endif %}
+{% if message == "face_camera_not_ready" %}
+<div class="alert alert-warning">Camera chua san sang. Hay doi vai giay roi chup lai.</div>
+{% endif %}
+{% if message == "face_deleted" %}
+<div class="alert alert-success">Da xoa face profile.</div>
+{% endif %}
+{% if message == "nfc_deleted" %}
+<div class="alert alert-success">Da xoa the NFC.</div>
+{% endif %}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <h2 class="h5">Dang ky khuon mat bang USB camera</h2>
+    <div class="camera-preview mb-3">
+      <img src="/api/face/camera/stream" alt="USB camera stream">
+    </div>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      {% for pose, label in [("front","Chinh dien"),("left","Trai"),("right","Phai"),("up","Nhin len"),("down","Nhin xuong")] %}
+      <form method="post" action="/admin/students/{{ student.id }}/faces/capture">
+        <input type="hidden" name="pose" value="{{ pose }}">
+        <button class="btn btn-outline-primary btn-sm">{{ label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    <h2 class="h6">Tai anh khuon mat</h2>
+    <form method="post" action="/admin/students/{{ student.id }}/faces/enroll" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label class="form-label">Anh khuon mat</label>
+        <input name="files" type="file" accept="image/jpeg,image/png" multiple class="form-control" required>
+      </div>
+      <button class="btn btn-primary">Dang ky khuon mat</button>
+    </form>
+    <table class="table table-sm mt-3">
+      <tr><th>ID</th><th>Model</th><th>Dim</th><th>Quality</th><th>Created</th><th></th></tr>
+      {% for row in face_profile_rows %}
+      {% set profile = row.profile %}
+      <tr>
+        <td>{{ profile.id }}</td>
+        <td>{{ profile.model_name }}</td>
+        <td>{{ row.dimension }}{% if row.dimension != 512 %}<span class="badge text-bg-warning">re-enroll</span>{% endif %}</td>
+        <td>{{ profile.quality_score or "" }}</td>
+        <td>{{ profile.created_at }}</td>
+        <td class="text-end">
+          <form method="post" action="/admin/students/{{ student.id }}/faces/{{ profile.id }}/delete" onsubmit="return confirm('Delete this face profile?')">
+            <button class="btn btn-sm btn-outline-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-muted">Chua co face profile.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="col-lg-5">
+    <h2 class="h5">Dang ky the NFC</h2>
+    <form method="post" action="/admin/students/{{ student.id }}/nfc/enroll" class="d-flex gap-2 align-items-end">
+      <div><label class="form-label">Door</label><input name="door_id" value="door-01" class="form-control"></div>
+      <button class="btn btn-primary">Start NFC enrollment</button>
+    </form>
+    <table class="table table-sm mt-3">
+      <tr><th>ID</th><th>Label</th><th>Active</th><th>Created</th><th></th></tr>
+      {% for card in cards %}
+      <tr>
+        <td>{{ card.id }}</td>
+        <td>{{ card.card_label or "" }}</td>
+        <td>{{ "yes" if card.active else "no" }}</td>
+        <td>{{ card.created_at }}</td>
+        <td class="text-end">
+          <form method="post" action="/admin/students/{{ student.id }}/nfc/{{ card.id }}/delete" onsubmit="return confirm('Delete this NFC card?')">
+            <button class="btn btn-sm btn-outline-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted">Chua co the NFC.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

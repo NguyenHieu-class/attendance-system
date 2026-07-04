@@ -1,7 +1,58 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="d-flex justify-content-between"><h1 class="h3">Attendance</h1><a class="btn btn-outline-secondary" href="/admin/export/attendance.csv">Export CSV</a></div>
-<table class="table table-sm"><tr><th>ID</th><th>User</th><th>Method</th><th>Event</th><th>Time</th></tr>
-{% for log in logs %}<tr><td>{{ log.id }}</td><td>{{ log.user_id }}</td><td>{{ log.method }}</td><td>{{ log.event_type }}</td><td>{{ log.created_at }}</td></tr>{% endfor %}
+<div class="d-flex justify-content-between"><h1 class="h3">Diem danh</h1><a class="btn btn-outline-secondary" href="/admin/export/attendance.csv">Export CSV</a></div>
+<div class="row g-3 my-3">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <div class="text-muted">Da diem danh hom nay</div>
+        <div class="fs-2 fw-semibold">{{ attended_count }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <div class="text-muted">Nguoi trong phong</div>
+        <div class="fs-2 fw-semibold">{{ people_inside }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <div class="text-muted">Nguoi da ra</div>
+        <div class="fs-2 fw-semibold">{{ people_out }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="h5 mt-4">Diem danh trong ngay</h2>
+<table class="table table-sm">
+  <tr><th>Sinh vien</th><th>Ma sinh vien</th><th>Thoi gian diem danh</th><th>Checkout</th><th>Thoi gian trong phong</th><th>Trang thai</th></tr>
+  {% for row in attendance_rows %}
+  <tr>
+    <td>{{ row.full_name }}</td>
+    <td>{{ row.student_code }}</td>
+    <td>{{ row.check_in_at }}</td>
+    <td>
+      {% if row.check_out_at %}
+        {{ row.check_out_at }}
+      {% else %}
+        {{ row.default_check_out_at }} <span class="badge text-bg-secondary">mac dinh cuoi ngay</span>
+      {% endif %}
+    </td>
+    <td>{{ row.duration }}</td>
+    <td>{{ "trong phong" if row.status == "inside" else "da ra" }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="text-muted">Chua co ai diem danh hom nay.</td></tr>
+  {% endfor %}
+</table>
+
+<h2 class="h5 mt-4">Log diem danh</h2>
+<table class="table table-sm"><tr><th>ID</th><th>Sinh vien</th><th>Phuong thuc</th><th>Su kien</th><th>Thoi gian</th></tr>
+{% for log in logs %}<tr><td>{{ log.id }}</td><td>{{ log.student_id }}</td><td>{{ log.method }}</td><td>{{ log.event_type }}</td><td>{{ log.created_at }}</td></tr>{% endfor %}
 </table>
 {% endblock %}

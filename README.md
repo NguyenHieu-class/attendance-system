@@ -1,6 +1,6 @@
-# Attendance Door Access System
+# Student Attendance Door Access System
 
-FastAPI + SQLite + ESP32-S3 MVP for local attendance, NFC access, face-recognition integration, and door unlock control.
+FastAPI + SQLite + ESP32-S3 MVP for student attendance, NFC access, face-recognition integration, and door unlock control.
 
 ## Architecture
 
@@ -26,8 +26,8 @@ For face recognition, install InsightFace and ONNX Runtime on the Pi, then keep 
 ## MVP Features
 
 - Admin login/logout.
-- Dashboard with user, attendance, allowed, denied, and door status counts.
-- User create/edit/disable/delete-or-soft-delete.
+- Dashboard with student attendance, allowed, denied, and door status counts.
+- Student create/edit/disable/delete-or-soft-delete.
 - Door settings for access mode, unlock duration, face threshold, and physical button.
 - ESP32 heartbeat, config, NFC scan, button event, and door status APIs.
 - Door unlock command from backend to ESP32.
@@ -60,7 +60,7 @@ Set `ESP32_SHARED_SECRET` in `backend/.env` to the same value as `DEVICE_API_KEY
 
 1. Create an admin with `python ../scripts/create_admin.py`.
 2. Login to WebUI.
-3. Create users.
+3. Create students.
 4. Open a user Face/NFC screen and press `Start NFC enrollment`.
 5. Scan the next NFC card on ESP32.
 6. Change door mode under Doors > Settings.

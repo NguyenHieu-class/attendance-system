@@ -21,7 +21,7 @@ async def recognize(door_id: str = "door-01", file: UploadFile = File(...), db: 
 
 @router.post("/enroll")
 async def enroll_stub() -> dict:
-    return {"ok": False, "reason": "use admin user face enrollment skeleton; camera capture is planned after MVP"}
+    return {"ok": False, "reason": "use admin student face enrollment page"}
 
 
 @router.get("/camera/stream")

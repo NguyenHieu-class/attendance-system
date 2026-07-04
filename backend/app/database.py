@@ -28,7 +28,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_all() -> None:
-    from app.models import access_log, admin, attendance_log, device, door, face_profile, nfc_card, nfc_enrollment, user  # noqa: F401
+    from app.models import access_log, admin, attendance_log, device, door, face_profile, nfc_card, nfc_enrollment, student  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     migrate_schema()

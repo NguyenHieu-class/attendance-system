@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3">Danh sach sinh vien</h1><a class="btn btn-primary" href="/admin/students/new">Them sinh vien</a>
+</div>
+<table class="table table-hover">
+  <tr><th>Ma sinh vien</th><th>Ho va ten</th><th>Lop</th><th>Khoa</th><th>Trang thai</th><th></th></tr>
+  {% for student in students %}
+  <tr>
+    <td>{{ student.student_code }}</td><td>{{ student.full_name }}</td><td>{{ student.class_name or "" }}</td><td>{{ student.faculty or "" }}</td><td>{{ student.status }}</td>
+    <td class="text-end">
+      <a class="btn btn-sm btn-outline-secondary" href="/admin/students/{{ student.id }}">Sua</a>
+      <a class="btn btn-sm btn-outline-primary" href="/admin/students/{{ student.id }}/faces">Face/NFC</a>
+      <form method="post" action="/admin/students/{{ student.id }}/disable" class="d-inline"><button class="btn btn-sm btn-outline-warning">Disable</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

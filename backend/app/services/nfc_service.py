@@ -3,15 +3,15 @@ from sqlalchemy.orm import Session
 
 from app.models.nfc_card import NfcCard
 from app.models.nfc_enrollment import NfcEnrollment
-from app.models.user import User
+from app.models.student import Student
 from app.security import hash_nfc_uid, now_utc
 
 
-def start_enrollment(db: Session, door_id: str, user_id: int) -> NfcEnrollment:
+def start_enrollment(db: Session, door_id: str, student_id: int) -> NfcEnrollment:
     for existing in db.scalars(select(NfcEnrollment).where(NfcEnrollment.door_id == door_id, NfcEnrollment.active.is_(True))).all():
         existing.active = False
         existing.consumed_at = now_utc()
-    enrollment = NfcEnrollment(door_id=door_id, user_id=user_id, active=True)
+    enrollment = NfcEnrollment(door_id=door_id, student_id=student_id, active=True)
     db.add(enrollment)
     db.commit()
     db.refresh(enrollment)
@@ -29,10 +29,10 @@ def consume_enrollment(db: Session, door_id: str, raw_uid: str) -> NfcCard | Non
     uid_hash = hash_nfc_uid(raw_uid)
     card = db.scalar(select(NfcCard).where(NfcCard.card_uid_hash == uid_hash))
     if card:
-        card.user_id = enrollment.user_id
+        card.student_id = enrollment.student_id
         card.active = True
     else:
-        card = NfcCard(user_id=enrollment.user_id, card_uid_hash=uid_hash, card_label="ESP32 enrolled", active=True)
+        card = NfcCard(student_id=enrollment.student_id, card_uid_hash=uid_hash, card_label="ESP32 enrolled", active=True)
         db.add(card)
     enrollment.active = False
     enrollment.consumed_at = now_utc()
@@ -41,12 +41,12 @@ def consume_enrollment(db: Session, door_id: str, raw_uid: str) -> NfcCard | Non
     return card
 
 
-def identify_card(db: Session, raw_uid: str) -> tuple[User | None, str]:
+def identify_card(db: Session, raw_uid: str) -> tuple[Student | None, str]:
     uid_hash = hash_nfc_uid(raw_uid)
     card = db.scalar(select(NfcCard).where(NfcCard.card_uid_hash == uid_hash, NfcCard.active.is_(True)))
     if not card:
         return None, uid_hash
-    user = db.get(User, card.user_id)
-    if not user or user.status != "active":
+    student = db.get(Student, card.student_id)
+    if not student or student.status != "active":
         return None, uid_hash
-    return user, uid_hash
+    return student, uid_hash

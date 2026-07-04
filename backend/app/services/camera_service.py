@@ -33,7 +33,7 @@ class CameraService:
         self._last_detection_at = 0.0
         self._last_recognize_at = 0.0
         self._recognize_interval_sec = 0.75
-        self._last_access_at_by_user: dict[int, float] = {}
+        self._last_access_at_by_student: dict[int, float] = {}
         self._last_result: dict = {"status": "stopped"}
 
     def start(self, door_id: str = "door-01", recognition_enabled: bool = False) -> None:
@@ -146,9 +146,9 @@ class CameraService:
             result = asyncio.run(process_face_access_async(db, frame, self._door_id, dispatch_unlock=not dry_run))
             detections = result.get("detections", [])
             access = result.get("access")
-            first_allowed = next((face for face in detections if face.get("user_id")), None)
+            first_allowed = next((face for face in detections if face.get("student_id")), None)
             if first_allowed:
-                self._last_access_at_by_user[first_allowed["user_id"]] = time.time()
+                self._last_access_at_by_student[first_allowed["student_id"]] = time.time()
             with self._lock:
                 self._detections = detections
                 self._last_detection_at = time.time() if detections else 0.0
@@ -165,10 +165,10 @@ class CameraService:
         finally:
             db.close()
 
-    def _can_send_access(self, user_id: int | None, cooldown_sec: int) -> bool:
-        if user_id is None:
+    def _can_send_access(self, student_id: int | None, cooldown_sec: int) -> bool:
+        if student_id is None:
             return False
-        last = self._last_access_at_by_user.get(user_id, 0.0)
+        last = self._last_access_at_by_student.get(student_id, 0.0)
         return time.time() - last >= max(cooldown_sec, 1)
 
     @staticmethod

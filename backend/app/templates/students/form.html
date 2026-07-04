@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h3">{{ "Sua sinh vien" if student else "Them sinh vien" }}</h1>
+<form method="post" action="{{ '/admin/students/' ~ student.id ~ '/edit' if student else '/admin/students' }}" class="row g-3">
+  <div class="col-md-4"><label class="form-label">Ma sinh vien</label><input name="student_code" class="form-control" value="{{ student.student_code if student else '' }}" required></div>
+  <div class="col-md-8"><label class="form-label">Ho va ten</label><input name="full_name" class="form-control" value="{{ student.full_name if student else '' }}" required></div>
+  <div class="col-md-4"><label class="form-label">Lop</label><input name="class_name" class="form-control" value="{{ student.class_name if student else '' }}"></div>
+  <div class="col-md-4"><label class="form-label">Khoa</label><input name="faculty" class="form-control" value="{{ student.faculty if student else '' }}"></div>
+  <div class="col-md-4"><label class="form-label">Nganh hoc</label><input name="major" class="form-control" value="{{ student.major if student else '' }}"></div>
+  <div class="col-md-4"><label class="form-label">Trang thai</label><select name="status" class="form-select"><option value="active" {% if student and student.status == "active" %}selected{% endif %}>active</option><option value="inactive" {% if student and student.status == "inactive" %}selected{% endif %}>inactive</option><option value="blocked" {% if student and student.status == "blocked" %}selected{% endif %}>blocked</option></select></div>
+  <div class="col-md-4"><label class="form-label">Email</label><input name="email" class="form-control" value="{{ student.email if student else '' }}"></div>
+  <div class="col-md-4"><label class="form-label">So dien thoai</label><input name="phone" class="form-control" value="{{ student.phone if student else '' }}"></div>
+  <div class="col-12"><button class="btn btn-primary">Luu</button> <a class="btn btn-link" href="/admin/students">Huy</a></div>
+</form>
+{% endblock %}

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.user import User
+from app.models.student import Student
 from app.security import verify_api_key
 from app.services.access_policy_service import AccessEvent, evaluate_access
 from app.services.door_service import get_settings_for_door, update_heartbeat
@@ -59,16 +59,18 @@ async def nfc_scan(door_id: str, payload: NfcScan, request: Request, db: Session
     update_heartbeat(db, door_id, client_host(request))
     enrolled = consume_enrollment(db, door_id, payload.uid)
     if enrolled:
-        user = db.get(User, enrolled.user_id)
+        student = db.get(Student, enrolled.student_id)
+        student_payload = {"id": student.id, "full_name": student.full_name, "student_code": student.student_code, "employee_code": student.student_code} if student else None
         return {
             "allowed": False,
             "reason": "card_enrolled",
-            "user_id": enrolled.user_id,
-            "user": {"id": user.id, "full_name": user.full_name, "employee_code": user.employee_code} if user else None,
+            "student_id": enrolled.student_id,
+            "student": student_payload,
+            "user": student_payload,
             "should_unlock": False,
         }
-    user, uid_hash = identify_card(db, payload.uid)
-    return await evaluate_access(db, AccessEvent(door_id=door_id, method="nfc", user_id=user.id if user else None, nfc_uid_hash=uid_hash), dispatch_unlock=False)
+    student, uid_hash = identify_card(db, payload.uid)
+    return await evaluate_access(db, AccessEvent(door_id=door_id, method="nfc", student_id=student.id if student else None, nfc_uid_hash=uid_hash), dispatch_unlock=False)
 
 
 @router.post("/{door_id}/button-event")

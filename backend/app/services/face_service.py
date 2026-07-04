@@ -10,14 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models.face_profile import FaceProfile
-from app.models.user import User
+from app.models.student import Student
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class FaceResult:
-    user_id: int | None
+    student_id: int | None
     full_name: str | None
     confidence: float
     status: str
@@ -25,7 +25,7 @@ class FaceResult:
 
 @dataclass
 class DetectedFace:
-    user_id: int | None
+    student_id: int | None
     full_name: str
     confidence: float
     status: str
@@ -113,9 +113,9 @@ class FaceService:
         embedding = self.get_embedding(frame)
         if embedding is None:
             return FaceResult(None, None, 0.0, "unknown")
-        user, score = self._match_embedding(db, embedding)
-        if user and score >= threshold:
-            return FaceResult(user.id, user.full_name, score, "matched")
+        student, score = self._match_embedding(db, embedding)
+        if student and score >= threshold:
+            return FaceResult(student.id, student.full_name, score, "matched")
         return FaceResult(None, None, score, "unknown")
 
     def recognize_faces(self, db: Session, frame, threshold: float) -> list[DetectedFace]:
@@ -123,39 +123,39 @@ class FaceService:
         results: list[DetectedFace] = []
         for face in faces:
             embedding = face.embedding.astype(float).tolist()
-            user, score = self._match_embedding(db, embedding)
+            student, score = self._match_embedding(db, embedding)
             x1, y1, x2, y2 = [int(v) for v in face.bbox]
-            if user and score >= threshold:
-                results.append(DetectedFace(user.id, user.full_name, score, "matched", (x1, y1, x2, y2)))
+            if student and score >= threshold:
+                results.append(DetectedFace(student.id, student.full_name, score, "matched", (x1, y1, x2, y2)))
             else:
                 results.append(DetectedFace(None, "unauthorized", max(score, 0.0), "unauthorized", (x1, y1, x2, y2)))
         return results
 
-    def match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
-        best_user: User | None = None
+    def match_embedding(self, db: Session, embedding: list[float]) -> tuple[Student | None, float]:
+        best_student: Student | None = None
         best_score = 0.0
         profiles = db.scalars(select(FaceProfile)).all()
         for profile in profiles:
-            user = db.get(User, profile.user_id)
-            if not user or user.status != "active":
+            student = db.get(Student, profile.student_id)
+            if not student or student.status != "active":
                 continue
             stored_embedding = self.deserialize_embedding(profile.embedding)
             score = self.compare_embeddings(embedding, stored_embedding)
             if score < 0:
                 logger.warning(
-                    "Skipping incompatible face profile id=%s user_id=%s dim=%s expected=%s",
+                    "Skipping incompatible face profile id=%s student_id=%s dim=%s expected=%s",
                     profile.id,
-                    profile.user_id,
+                    profile.student_id,
                     len(stored_embedding),
                     len(embedding),
                 )
                 continue
             if score > best_score:
                 best_score = score
-                best_user = user
-        return best_user, best_score
+                best_student = student
+        return best_student, best_score
 
-    def _match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
+    def _match_embedding(self, db: Session, embedding: list[float]) -> tuple[Student | None, float]:
         return self.match_embedding(db, embedding)
 
 

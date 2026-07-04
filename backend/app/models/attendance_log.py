@@ -10,7 +10,7 @@ class AttendanceLog(Base):
     __tablename__ = "attendance_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id"), nullable=True, index=True)
     method: Mapped[str] = mapped_column(String(32), index=True)
     event_type: Mapped[str] = mapped_column(String(32), index=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
