@@ -51,7 +51,14 @@ def update_heartbeat(db: Session, door_id: str, client_host: str | None = None) 
     return door
 
 
-async def unlock_door(db: Session, door_id: str, source: str, user_id: int | None = None) -> bool:
+async def unlock_door(
+    db: Session,
+    door_id: str,
+    source: str,
+    user_id: int | None = None,
+    full_name: str | None = None,
+    employee_code: str | None = None,
+) -> bool:
     door = db.scalar(select(Door).where(Door.door_id == door_id))
     if not door:
         return False
@@ -61,4 +68,18 @@ async def unlock_door(db: Session, door_id: str, source: str, user_id: int | Non
     if last and now - last < timedelta(seconds=setting.anti_repeat_cooldown_sec):
         return True
     _last_unlock_at[door_id] = now
-    return await Esp32Client().unlock(door, setting.unlock_duration_ms, source, user_id)
+    return await Esp32Client().unlock(door, setting.unlock_duration_ms, source, user_id, full_name, employee_code)
+
+
+async def notify_door(
+    db: Session,
+    door_id: str,
+    status: str,
+    reason: str,
+    full_name: str | None = None,
+    employee_code: str | None = None,
+) -> bool:
+    door = db.scalar(select(Door).where(Door.door_id == door_id))
+    if not door:
+        return False
+    return await Esp32Client().notify(door, status, reason, full_name, employee_code)

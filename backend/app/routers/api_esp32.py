@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.user import User
 from app.security import verify_api_key
 from app.services.access_policy_service import AccessEvent, evaluate_access
 from app.services.door_service import get_settings_for_door, update_heartbeat
@@ -58,7 +59,14 @@ async def nfc_scan(door_id: str, payload: NfcScan, request: Request, db: Session
     update_heartbeat(db, door_id, client_host(request))
     enrolled = consume_enrollment(db, door_id, payload.uid)
     if enrolled:
-        return {"allowed": False, "reason": "card_enrolled", "user_id": enrolled.user_id, "should_unlock": False}
+        user = db.get(User, enrolled.user_id)
+        return {
+            "allowed": False,
+            "reason": "card_enrolled",
+            "user_id": enrolled.user_id,
+            "user": {"id": user.id, "full_name": user.full_name, "employee_code": user.employee_code} if user else None,
+            "should_unlock": False,
+        }
     user, uid_hash = identify_card(db, payload.uid)
     return await evaluate_access(db, AccessEvent(door_id=door_id, method="nfc", user_id=user.id if user else None, nfc_uid_hash=uid_hash), dispatch_unlock=False)
 

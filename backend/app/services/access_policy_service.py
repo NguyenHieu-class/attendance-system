@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.models.access_log import AccessLog
+from app.models.user import User
 from app.services.attendance_service import record_attendance
-from app.services.door_service import get_settings_for_door, unlock_door
+from app.services.door_service import get_settings_for_door, notify_door, unlock_door
 
 _pending_face: dict[tuple[str, int], datetime] = {}
 _pending_nfc: dict[tuple[str, int], datetime] = {}
@@ -23,6 +24,7 @@ class AccessEvent:
 
 async def evaluate_access(db: Session, event: AccessEvent, dispatch_unlock: bool = True) -> dict:
     setting = get_settings_for_door(db, event.door_id)
+    user = db.get(User, event.user_id) if event.user_id else None
     allowed = False
     reason = "denied_by_policy"
     source = event.method
@@ -72,8 +74,52 @@ async def evaluate_access(db: Session, event: AccessEvent, dispatch_unlock: bool
     db.commit()
 
     should_unlock = bool(allowed and event.method != "physical_button")
-    unlock_sent = await unlock_door(db, event.door_id, source, event.user_id) if should_unlock and dispatch_unlock else False
-    return {"allowed": allowed, "reason": reason, "user_id": event.user_id, "should_unlock": should_unlock, "unlock_sent": unlock_sent}
+    unlock_sent = (
+        await unlock_door(
+            db,
+            event.door_id,
+            source,
+            event.user_id,
+            user.full_name if user else None,
+            user.employee_code if user else None,
+        )
+        if should_unlock and dispatch_unlock
+        else False
+    )
+    notify_sent = False
+    if dispatch_unlock and not should_unlock and event.method in ("face", "admin_remote") and reason == "waiting_for_second_factor":
+        notify_sent = await notify_door(
+            db,
+            event.door_id,
+            "waiting",
+            reason,
+            user.full_name if user else None,
+            user.employee_code if user else None,
+        )
+    elif dispatch_unlock and not should_unlock and event.method in ("face", "admin_remote") and reason != "waiting_for_second_factor":
+        notify_sent = await notify_door(
+            db,
+            event.door_id,
+            "denied",
+            reason,
+            user.full_name if user else None,
+            user.employee_code if user else None,
+        )
+    return {
+        "allowed": allowed,
+        "reason": reason,
+        "user_id": event.user_id,
+        "user": {
+            "id": user.id,
+            "full_name": user.full_name,
+            "employee_code": user.employee_code,
+        }
+        if user
+        else None,
+        "should_unlock": should_unlock,
+        "unlock_sent": unlock_sent,
+        "notify_sent": notify_sent,
+    }
 
 
 def _handle_dual_auth(door_id: str, user_id: int, method: str, timeout_sec: int) -> tuple[bool, str]:
