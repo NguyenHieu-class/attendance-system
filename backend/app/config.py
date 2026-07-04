@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     camera_index: int = 0
     face_model_name: str = "buffalo_s"
     face_allow_mock: bool = False
+    liveness_enabled: bool = True
+    liveness_model_path: str = "../data/models/anti_spoofing.onnx"
+    liveness_threshold: float = 0.80
+    liveness_fail_closed: bool = True
     data_dir: str = "../data"
     session_cookie_name: str = "attendance_session"
 

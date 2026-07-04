@@ -131,7 +131,7 @@ class FaceService:
                 results.append(DetectedFace(None, "unauthorized", max(score, 0.0), "unauthorized", (x1, y1, x2, y2)))
         return results
 
-    def _match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
+    def match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
         best_user: User | None = None
         best_score = 0.0
         profiles = db.scalars(select(FaceProfile)).all()
@@ -154,6 +154,9 @@ class FaceService:
                 best_score = score
                 best_user = user
         return best_user, best_score
+
+    def _match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
+        return self.match_embedding(db, embedding)
 
 
 face_service = FaceService()

@@ -16,6 +16,8 @@ class AccessLog(Base):
     result: Mapped[str] = mapped_column(String(32), index=True)
     reason: Mapped[str] = mapped_column(String(255))
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    liveness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    spoof_result: Mapped[str | None] = mapped_column(String(32), nullable=True)
     snapshot_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     nfc_uid_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

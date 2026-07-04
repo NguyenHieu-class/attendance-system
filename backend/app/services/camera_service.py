@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.services.access_policy_service import AccessEvent, evaluate_access
 from app.services.door_service import get_settings_for_door
+from app.services.face_access_service import process_face_access_async
 from app.services.face_service import face_service
 
 logger = logging.getLogger(__name__)
@@ -141,23 +142,13 @@ class CameraService:
         db = SessionLocal()
         try:
             setting = get_settings_for_door(db, self._door_id)
-            detected_faces = face_service.recognize_faces(db, frame, setting.face_threshold)
-            access = None
-            first_allowed = next((face for face in detected_faces if face.user_id), None)
-            if first_allowed and self._can_send_access(first_allowed.user_id, setting.anti_repeat_cooldown_sec):
-                access = asyncio.run(
-                    evaluate_access(
-                        db,
-                        AccessEvent(
-                            door_id=self._door_id,
-                            method="face",
-                            user_id=first_allowed.user_id,
-                            confidence=first_allowed.confidence,
-                        ),
-                    )
-                )
-                self._last_access_at_by_user[first_allowed.user_id] = time.time()
-            detections = [asdict(face) for face in detected_faces]
+            dry_run = False
+            result = asyncio.run(process_face_access_async(db, frame, self._door_id, dispatch_unlock=not dry_run))
+            detections = result.get("detections", [])
+            access = result.get("access")
+            first_allowed = next((face for face in detections if face.get("user_id")), None)
+            if first_allowed:
+                self._last_access_at_by_user[first_allowed["user_id"]] = time.time()
             with self._lock:
                 self._detections = detections
                 self._last_detection_at = time.time() if detections else 0.0
@@ -206,7 +197,7 @@ class CameraService:
             y2 = int(y2 * scale_y)
             authorized = face["status"] == "matched"
             color = (0, 220, 0) if authorized else (0, 0, 255)
-            label = face["full_name"] if authorized else "unauthorized"
+            label = face["full_name"] if authorized else ("spoof" if face["full_name"] == "spoof" else "unauthorized")
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
             text_y = min(y2 + 24, preview_h - 8)
             cv2.putText(annotated, label, (x1, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)

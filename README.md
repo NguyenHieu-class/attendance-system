@@ -84,6 +84,40 @@ python ../scripts/test_camera.py
 
 Open a user detail page and choose `Face/NFC` to enroll face profiles directly from the USB camera. Capture several directions: front, left, right, look up, and look down. Then open `http://RASPBERRY_PI_IP:8000/admin/camera`, start the camera, and enable live recognition. The backend reads frames from the USB webcam, recognizes faces against enrolled `face_profiles`, applies the selected door access mode, writes logs, and sends unlock commands to ESP32 when allowed.
 
+## Passive Liveness Detection
+
+InsightFace identifies who a face belongs to; it does not by itself prove that the camera is seeing a real live person. This system adds a passive liveness layer before InsightFace recognition. The liveness service can run a MiniFASNet, Silent-Face-Anti-Spoofing, or compatible ONNX anti-spoofing model with ONNX Runtime.
+
+Configure it in `backend/.env`:
+
+```env
+LIVENESS_ENABLED=true
+LIVENESS_MODEL_PATH=../data/models/anti_spoofing.onnx
+LIVENESS_THRESHOLD=0.80
+LIVENESS_FAIL_CLOSED=true
+```
+
+Place the ONNX model at:
+
+```text
+attendance-system/data/models/anti_spoofing.onnx
+```
+
+You can also adjust per-door liveness settings in WebUI under `Doors > Settings > Liveness Detection`. Door settings take priority over `.env` threshold and fail-closed behavior.
+
+When liveness is enabled:
+
+- The camera first detects a face.
+- The anti-spoofing model checks the face crop.
+- If the result is fake, unknown, or the model is unavailable while fail-closed is enabled, face unlock is denied and an access log is written.
+- Only live faces continue to InsightFace recognition.
+
+If no ONNX model is present and `LIVENESS_FAIL_CLOSED=true`, face unlock is denied with reason `anti_spoofing_model_not_loaded`. This is intentional for real door deployments. If you need to test without a model, temporarily set `LIVENESS_FAIL_CLOSED=false` or disable liveness in Door Settings.
+
+On Raspberry Pi, if `opencv-python` is difficult to install, use `opencv-python-headless` instead.
+
+For real access control, keep liveness enabled, prefer `face_and_nfc` for important rooms, and avoid relying only on `face_only` until your RGB camera and anti-spoofing model have been tested in your lighting conditions.
+
 ## Backup
 
 Stop the backend and copy `backend/attendance.db` to a safe location:

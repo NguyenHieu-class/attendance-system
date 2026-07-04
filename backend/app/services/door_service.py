@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models.door import Door, DoorSetting
 from app.security import api_key_hash, now_utc
 from app.services.esp32_client import Esp32Client
@@ -33,7 +34,13 @@ def ensure_default_door(db: Session) -> Door:
 def get_settings_for_door(db: Session, door_id: str) -> DoorSetting:
     setting = db.scalar(select(DoorSetting).where(DoorSetting.door_id == door_id))
     if not setting:
-        setting = DoorSetting(door_id=door_id)
+        app_settings = get_settings()
+        setting = DoorSetting(
+            door_id=door_id,
+            liveness_enabled=app_settings.liveness_enabled,
+            liveness_threshold=app_settings.liveness_threshold,
+            liveness_fail_closed=app_settings.liveness_fail_closed,
+        )
         db.add(setting)
         db.commit()
         db.refresh(setting)
