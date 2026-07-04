@@ -148,8 +148,8 @@ void handleUnlock() {
   String fullName = doc["full_name"] | "";
   String employeeCode = doc["employee_code"] | "";
   showOpen(fullName, employeeCode);
-  localUnlock(duration);
   server.send(200, "application/json", "{\"ok\":true}");
+  localUnlock(duration);
 }
 
 void handleNotify() {
