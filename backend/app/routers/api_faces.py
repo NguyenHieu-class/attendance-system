@@ -3,9 +3,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.services.access_policy_service import AccessEvent, evaluate_access
 from app.services.camera_service import camera_service
-from app.services.door_service import get_settings_for_door
+from app.services.face_access_service import process_face_access_async
 
 router = APIRouter(prefix="/api/face", tags=["face"])
 
@@ -15,14 +14,9 @@ async def recognize(door_id: str = "door-01", file: UploadFile = File(...), db: 
     import cv2
     import numpy as np
 
-    from app.services.face_service import face_service
-
     data = await file.read()
     frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
-    setting = get_settings_for_door(db, door_id)
-    result = face_service.recognize_face(db, frame, setting.face_threshold)
-    access = await evaluate_access(db, AccessEvent(door_id=door_id, method="face", user_id=result.user_id, confidence=result.confidence))
-    return {"face": result.__dict__, "access": access}
+    return await process_face_access_async(db, frame, door_id)
 
 
 @router.post("/enroll")

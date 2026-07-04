@@ -35,4 +35,7 @@ class DoorSetting(Base):
     dual_auth_timeout_sec: Mapped[int] = mapped_column(Integer, default=10)
     anti_repeat_cooldown_sec: Mapped[int] = mapped_column(Integer, default=5)
     allow_offline_master_card: Mapped[bool] = mapped_column(Boolean, default=False)
+    liveness_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    liveness_threshold: Mapped[float] = mapped_column(Float, default=0.80)
+    liveness_fail_closed: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

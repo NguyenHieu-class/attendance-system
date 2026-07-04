@@ -74,8 +74,8 @@ class FaceService:
     def deserialize_embedding(self, stored: str) -> list[float]:
         if stored.startswith("pickle:"):
             raw = base64.b64decode(stored.removeprefix("pickle:"))
-            return pickle.loads(raw).astype(float).tolist()
-        return json.loads(stored)
+            return np.asarray(pickle.loads(raw), dtype=np.float32).reshape(-1).astype(float).tolist()
+        return np.asarray(json.loads(stored), dtype=np.float32).reshape(-1).astype(float).tolist()
 
     def embedding_dimension(self, stored: str) -> int:
         try:
@@ -102,8 +102,8 @@ class FaceService:
 
     @staticmethod
     def compare_embeddings(first: list[float], second: list[float]) -> float:
-        a = np.array(first, dtype=np.float32)
-        b = np.array(second, dtype=np.float32)
+        a = np.asarray(first, dtype=np.float32).reshape(-1)
+        b = np.asarray(second, dtype=np.float32).reshape(-1)
         if a.shape != b.shape:
             return -1.0
         denom = float(np.linalg.norm(a) * np.linalg.norm(b))
@@ -131,7 +131,7 @@ class FaceService:
                 results.append(DetectedFace(None, "unauthorized", max(score, 0.0), "unauthorized", (x1, y1, x2, y2)))
         return results
 
-    def _match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
+    def match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
         best_user: User | None = None
         best_score = 0.0
         profiles = db.scalars(select(FaceProfile)).all()
@@ -154,6 +154,9 @@ class FaceService:
                 best_score = score
                 best_user = user
         return best_user, best_score
+
+    def _match_embedding(self, db: Session, embedding: list[float]) -> tuple[User | None, float]:
+        return self.match_embedding(db, embedding)
 
 
 face_service = FaceService()

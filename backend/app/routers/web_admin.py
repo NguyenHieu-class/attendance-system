@@ -348,12 +348,26 @@ def door_settings(door_id: str, request: Request, db: Session = Depends(get_db),
 
 
 @router.post("/admin/doors/{door_id}/settings")
-def save_door_settings(door_id: str, access_mode: str = Form(...), unlock_duration_ms: int = Form(...), face_threshold: float = Form(...), physical_button_enabled: str | None = Form(None), db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+def save_door_settings(
+    door_id: str,
+    access_mode: str = Form(...),
+    unlock_duration_ms: int = Form(...),
+    face_threshold: float = Form(...),
+    physical_button_enabled: str | None = Form(None),
+    liveness_enabled: str | None = Form(None),
+    liveness_threshold: float = Form(0.80),
+    liveness_fail_closed: str | None = Form(None),
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin_page),
+):
     setting = get_settings_for_door(db, door_id)
     setting.access_mode = access_mode
     setting.unlock_duration_ms = unlock_duration_ms
     setting.face_threshold = face_threshold
     setting.physical_button_enabled = physical_button_enabled == "on"
+    setting.liveness_enabled = liveness_enabled == "on"
+    setting.liveness_threshold = liveness_threshold
+    setting.liveness_fail_closed = liveness_fail_closed == "on"
     db.commit()
     return RedirectResponse(f"/admin/doors/{door_id}/settings", status_code=303)
 
@@ -383,4 +397,4 @@ def export_attendance(db: Session = Depends(get_db), admin: Admin = Depends(requ
 @router.get("/admin/export/access_logs.csv")
 def export_access_logs(db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
     rows = db.scalars(select(AccessLog).order_by(AccessLog.created_at.desc())).all()
-    return csv_response("access_logs.csv", rows, ["id", "user_id", "door_id", "method", "result", "reason", "created_at"])
+    return csv_response("access_logs.csv", rows, ["id", "user_id", "door_id", "method", "result", "reason", "confidence", "liveness_score", "spoof_result", "created_at"])

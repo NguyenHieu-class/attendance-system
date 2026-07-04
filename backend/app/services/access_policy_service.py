@@ -18,6 +18,8 @@ class AccessEvent:
     method: str
     user_id: int | None = None
     confidence: float | None = None
+    liveness_score: float | None = None
+    spoof_result: str | None = None
     nfc_uid_hash: str | None = None
     reason: str | None = None
 
@@ -68,6 +70,8 @@ async def evaluate_access(db: Session, event: AccessEvent, dispatch_unlock: bool
         result="allowed" if allowed else "denied",
         reason=event.reason or reason,
         confidence=event.confidence,
+        liveness_score=event.liveness_score,
+        spoof_result=event.spoof_result,
         nfc_uid_hash=event.nfc_uid_hash,
     )
     db.add(log)
