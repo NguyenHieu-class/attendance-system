@@ -35,9 +35,11 @@ const char* AUTH_HEADER_KEYS[] = {"X-API-Key"};
 bool physicalButtonEnabled = true;
 bool allowOfflineMasterCard = false;
 int unlockDurationMs = 3000;
+int dualAuthTimeoutMs = 3000;
 unsigned long lastHeartbeat = 0;
 unsigned long lastConfigFetch = 0;
 unsigned long lastButtonMs = 0;
+unsigned long waitingUntilMs = 0;
 bool unlocking = false;
 
 String fitLcd(String value) {
@@ -56,18 +58,22 @@ void showLcd(const String& line1, const String& line2 = "") {
 }
 
 void showClosed() {
+  waitingUntilMs = 0;
   showLcd("CLOSE", WiFi.localIP().toString());
 }
 
 void showOpen(const String& name, const String& employeeCode) {
+  waitingUntilMs = 0;
   showLcd("OPEN", name.length() ? name : employeeCode);
 }
 
 void showWaiting(const String& name, const String& employeeCode) {
+  waitingUntilMs = millis() + dualAuthTimeoutMs;
   showLcd("WAITING AUTH", name.length() ? name : employeeCode);
 }
 
 void showDenied() {
+  waitingUntilMs = 0;
   showLcd("UNAUTHORIZED", "ACCESS DENIED");
 }
 
@@ -89,7 +95,7 @@ void beepDenied() {
 }
 
 void beepWaiting() {
-  beepPattern(3);
+  beepPattern(2);
 }
 
 void localUnlock(int durationMs) {
@@ -126,6 +132,7 @@ void fetchConfig() {
     deserializeJson(doc, http.getString());
     physicalButtonEnabled = doc["physical_button_enabled"] | physicalButtonEnabled;
     unlockDurationMs = doc["unlock_duration_ms"] | unlockDurationMs;
+    dualAuthTimeoutMs = (doc["dual_auth_timeout_sec"] | 3) * 1000;
     allowOfflineMasterCard = doc["allow_offline_master_card"] | allowOfflineMasterCard;
   }
   http.end();
@@ -211,14 +218,17 @@ void readNfc() {
     JsonDocument res;
     deserializeJson(res, response);
     String reason = res["reason"] | "";
+    bool suppressFeedback = res["suppress_feedback"] | false;
     String fullName = res["student"]["full_name"] | res["user"]["full_name"] | "";
     String employeeCode = res["student"]["student_code"] | res["user"]["employee_code"] | "";
     if (res["should_unlock"] == true) {
       showOpen(fullName, employeeCode);
       localUnlock(unlockDurationMs);
     } else if (reason == "waiting_for_second_factor") {
-      showWaiting(fullName, employeeCode);
-      beepWaiting();
+      if (!suppressFeedback) {
+        showWaiting(fullName, employeeCode);
+        beepWaiting();
+      }
     } else if (reason == "card_enrolled") {
       showLcd("NFC ENROLLED", fullName.length() ? fullName : employeeCode);
       beepSuccess();
@@ -277,5 +287,8 @@ void loop() {
   if (millis() - lastConfigFetch > 45000) {
     lastConfigFetch = millis();
     fetchConfig();
+  }
+  if (waitingUntilMs && millis() > waitingUntilMs && !unlocking) {
+    showClosed();
   }
 }

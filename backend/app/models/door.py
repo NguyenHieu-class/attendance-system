@@ -32,7 +32,7 @@ class DoorSetting(Base):
     button_mode: Mapped[str] = mapped_column(String(32), default="exit_only")
     unlock_duration_ms: Mapped[int] = mapped_column(Integer, default=3000)
     face_threshold: Mapped[float] = mapped_column(Float, default=0.50)
-    dual_auth_timeout_sec: Mapped[int] = mapped_column(Integer, default=10)
+    dual_auth_timeout_sec: Mapped[int] = mapped_column(Integer, default=3)
     anti_repeat_cooldown_sec: Mapped[int] = mapped_column(Integer, default=5)
     allow_offline_master_card: Mapped[bool] = mapped_column(Boolean, default=False)
     liveness_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

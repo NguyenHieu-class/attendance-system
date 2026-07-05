@@ -50,6 +50,7 @@ def device_config(door_id: str, request: Request, db: Session = Depends(get_db),
         "physical_button_enabled": setting.physical_button_enabled,
         "button_mode": setting.button_mode,
         "unlock_duration_ms": setting.unlock_duration_ms,
+        "dual_auth_timeout_sec": 3,
         "allow_offline_master_card": setting.allow_offline_master_card,
     }
 
