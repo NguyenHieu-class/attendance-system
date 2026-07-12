@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import date, datetime, time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -62,34 +62,14 @@ def get_daily_attendance_summary(db: Session, day: datetime | None = None) -> di
     people_inside = 0
     people_out = 0
     for student_id, student_logs in grouped.items():
-        first_check_in = next((log for log in student_logs if log.event_type == "check_in"), None)
-        if not first_check_in:
+        row = build_attendance_day_row(db, student_id, student_logs, end)
+        if not row:
             continue
-        checkout = next((log for log in student_logs if log.event_type == "check_out" and log.created_at >= first_check_in.created_at), None)
-        default_checkout = _align_datetime_timezone(end, first_check_in.created_at)
-        effective_checkout = checkout.created_at if checkout else default_checkout
-        seconds_inside = max(0, int((effective_checkout - first_check_in.created_at).total_seconds()))
-        latest_event = student_logs[-1].event_type
-        if latest_event == "check_in":
+        if row["status"] == "inside":
             people_inside += 1
-        elif latest_event == "check_out":
+        elif row["status"] == "out":
             people_out += 1
-        student = db.get(Student, student_id)
-        rows.append(
-            {
-                "student_id": student_id,
-                "student_code": student.student_code if student else "",
-                "full_name": student.full_name if student else f"Student {student_id}",
-                "class_name": student.class_name if student else "",
-                "faculty": student.faculty if student else "",
-                "check_in_at": first_check_in.created_at,
-                "check_out_at": checkout.created_at if checkout else None,
-                "default_check_out_at": default_checkout if not checkout else None,
-                "seconds_inside": seconds_inside,
-                "duration": format_duration(seconds_inside),
-                "status": "inside" if latest_event == "check_in" else "out",
-            }
-        )
+        rows.append(row)
 
     return {
         "rows": rows,
@@ -99,10 +79,120 @@ def get_daily_attendance_summary(db: Session, day: datetime | None = None) -> di
     }
 
 
+def get_attendance_export_rows(db: Session) -> list[dict]:
+    logs = db.scalars(
+        select(AttendanceLog)
+        .where(AttendanceLog.student_id.is_not(None))
+        .order_by(AttendanceLog.student_id.asc(), AttendanceLog.created_at.asc())
+    ).all()
+
+    grouped: dict[tuple[int, date], list[AttendanceLog]] = {}
+    for log in logs:
+        if log.student_id is None or log.created_at is None:
+            continue
+        grouped.setdefault((log.student_id, log.created_at.date()), []).append(log)
+
+    rows = []
+    index = 1
+    for (student_id, day), day_logs in sorted(grouped.items(), key=lambda item: (item[0][1], item[0][0])):
+        _, end = day_bounds(datetime.combine(day, time.min))
+        row = build_attendance_day_row(db, student_id, day_logs, end)
+        if not row:
+            continue
+        for session_index, session in enumerate(row["sessions"], start=1):
+            rows.append(
+                {
+                    "stt": index,
+                    "ma_sinh_vien": row["student_code"],
+                    "ho_va_ten": row["full_name"],
+                    "lop": row["class_name"],
+                    "khoa": row["faculty"],
+                    "ngay": day.isoformat(),
+                    "lan_vao": session_index,
+                    "gio_vao": session["check_in_at"],
+                    "gio_ra": session["check_out_at"],
+                    "phuong_thuc_mo_cua": session["method"],
+                    "so_gio_phien": session["duration_hours"],
+                    "tong_so_gio_trong_ngay": row["duration_hours"],
+                    "thoi_gian_o_trong_lop": row["duration"],
+                    "trang_thai": "trong_phong" if row["status"] == "inside" else "da_ra",
+                }
+            )
+            index += 1
+    return rows
+
+
+def build_attendance_day_row(db: Session, student_id: int, logs: list[AttendanceLog], day_end: datetime) -> dict | None:
+    sorted_logs = sorted(logs, key=lambda log: log.created_at)
+    sessions: list[tuple[AttendanceLog, AttendanceLog | None]] = []
+    open_check_in: AttendanceLog | None = None
+    methods: set[str] = set()
+
+    for log in sorted_logs:
+        if log.event_type == "check_in":
+            if open_check_in is None:
+                open_check_in = log
+                methods.add(log.method)
+        elif log.event_type == "check_out" and open_check_in is not None:
+            sessions.append((open_check_in, log))
+            open_check_in = None
+
+    if open_check_in is not None:
+        sessions.append((open_check_in, None))
+
+    if not sessions:
+        return None
+
+    first_check_in = sessions[0][0]
+    last_checkout = next((checkout for _, checkout in reversed(sessions) if checkout is not None), None)
+    has_open_session = sessions[-1][1] is None
+    default_checkout = _align_datetime_timezone(day_end, first_check_in.created_at) if has_open_session else None
+    seconds_inside = 0
+    session_rows = []
+
+    for check_in, check_out in sessions:
+        effective_checkout = check_out.created_at if check_out else _align_datetime_timezone(day_end, check_in.created_at)
+        session_seconds = max(0, int((effective_checkout - check_in.created_at).total_seconds()))
+        seconds_inside += session_seconds
+        session_rows.append(
+            {
+                "check_in_at": check_in.created_at,
+                "check_out_at": effective_checkout,
+                "method": check_in.method,
+                "seconds_inside": session_seconds,
+                "duration": format_duration(session_seconds),
+                "duration_hours": format_hours(session_seconds),
+            }
+        )
+
+    student = db.get(Student, student_id)
+    return {
+        "student_id": student_id,
+        "student_code": student.student_code if student else "",
+        "full_name": student.full_name if student else f"Student {student_id}",
+        "class_name": student.class_name if student else "",
+        "faculty": student.faculty if student else "",
+        "check_in_at": first_check_in.created_at,
+        "check_out_at": last_checkout.created_at if last_checkout and not has_open_session else None,
+        "default_check_out_at": default_checkout,
+        "seconds_inside": seconds_inside,
+        "duration": format_duration(seconds_inside),
+        "duration_hours": format_hours(seconds_inside),
+        "status": "inside" if has_open_session else "out",
+        "method": ", ".join(sorted(methods)),
+        "session_count": len(sessions),
+        "sessions": session_rows,
+    }
+
+
 def format_duration(total_seconds: int) -> str:
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     return f"{hours:02d}:{minutes:02d}"
+
+
+def format_hours(total_seconds: int) -> str:
+    return f"{total_seconds / 3600:.2f}"
 
 
 def _align_datetime_timezone(value: datetime, reference: datetime) -> datetime:

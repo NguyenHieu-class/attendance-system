@@ -21,7 +21,7 @@ from app.models.nfc_enrollment import NfcEnrollment
 from app.models.student import Student
 from app.security import authenticate_admin, clear_session, create_session, get_current_admin, require_admin_page
 from app.services.access_policy_service import AccessEvent, evaluate_access
-from app.services.attendance_service import day_bounds, get_daily_attendance_summary
+from app.services.attendance_service import day_bounds, get_attendance_export_rows, get_daily_attendance_summary
 from app.services.camera_service import camera_service
 from app.services.door_service import ensure_default_door, get_settings_for_door
 from app.services.face_service import face_service
@@ -425,10 +425,34 @@ def csv_response(filename: str, rows: list, fields: list[str]) -> StreamingRespo
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
+def csv_dict_response(filename: str, rows: list[dict], fields: list[str]) -> StreamingResponse:
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+    output.seek(0)
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+
 @router.get("/admin/export/attendance.csv")
 def export_attendance(db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    rows = db.scalars(select(AttendanceLog).order_by(AttendanceLog.created_at.desc())).all()
-    return csv_response("attendance.csv", rows, ["id", "student_id", "method", "event_type", "created_at"])
+    fields = [
+        "stt",
+        "ma_sinh_vien",
+        "ho_va_ten",
+        "lop",
+        "khoa",
+        "ngay",
+        "lan_vao",
+        "gio_vao",
+        "gio_ra",
+        "phuong_thuc_mo_cua",
+        "so_gio_phien",
+        "tong_so_gio_trong_ngay",
+        "thoi_gian_o_trong_lop",
+        "trang_thai",
+    ]
+    return csv_dict_response("attendance.csv", get_attendance_export_rows(db), fields)
 
 
 @router.get("/admin/export/access_logs.csv")

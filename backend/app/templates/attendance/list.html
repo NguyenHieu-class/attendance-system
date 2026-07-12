@@ -30,7 +30,7 @@
 
 <h2 class="h5 mt-4">Diem danh trong ngay</h2>
 <table class="table table-sm">
-  <tr><th>Sinh vien</th><th>Ma sinh vien</th><th>Thoi gian diem danh</th><th>Checkout</th><th>Thoi gian trong phong</th><th>Trang thai</th></tr>
+  <tr><th>Sinh vien</th><th>Ma sinh vien</th><th>Thoi gian diem danh</th><th>Checkout</th><th>Phuong thuc</th><th>So lan vao</th><th>Thoi gian trong phong</th><th>Trang thai</th></tr>
   {% for row in attendance_rows %}
   <tr>
     <td>{{ row.full_name }}</td>
@@ -43,11 +43,13 @@
         {{ row.default_check_out_at }} <span class="badge text-bg-secondary">mac dinh cuoi ngay</span>
       {% endif %}
     </td>
+    <td>{{ row.method }}</td>
+    <td>{{ row.session_count }}</td>
     <td>{{ row.duration }}</td>
     <td>{{ "trong phong" if row.status == "inside" else "da ra" }}</td>
   </tr>
   {% else %}
-  <tr><td colspan="6" class="text-muted">Chua co ai diem danh hom nay.</td></tr>
+  <tr><td colspan="8" class="text-muted">Chua co ai diem danh hom nay.</td></tr>
   {% endfor %}
 </table>
 
