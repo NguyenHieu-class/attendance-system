@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date, datetime, time
 
 from sqlalchemy import select
@@ -5,6 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.models.attendance_log import AttendanceLog
 from app.models.student import Student
+
+
+@dataclass
+class AttendanceFilters:
+    start_date: date | None = None
+    end_date: date | None = None
+    student_code: str | None = None
+    class_name: str | None = None
+    faculty: str | None = None
+    method: str | None = None
 
 
 def record_attendance(
@@ -46,25 +57,27 @@ def day_bounds(day: datetime | None = None) -> tuple[datetime, datetime]:
 
 
 def get_daily_attendance_summary(db: Session, day: datetime | None = None) -> dict:
-    start, end = day_bounds(day)
-    logs = db.scalars(
-        select(AttendanceLog)
-        .where(AttendanceLog.created_at >= start, AttendanceLog.created_at <= end, AttendanceLog.student_id.is_not(None))
-        .order_by(AttendanceLog.student_id.asc(), AttendanceLog.created_at.asc())
-    ).all()
+    target = (day or datetime.now()).date()
+    return get_attendance_summary(db, AttendanceFilters(start_date=target, end_date=target))
 
-    grouped: dict[int, list[AttendanceLog]] = {}
+
+def get_attendance_summary(db: Session, filters: AttendanceFilters | None = None) -> dict:
+    logs = get_filtered_attendance_logs(db, filters)
+
+    grouped: dict[tuple[int, date], list[AttendanceLog]] = {}
     for log in logs:
-        if log.student_id is not None:
-            grouped.setdefault(log.student_id, []).append(log)
+        if log.student_id is not None and log.created_at is not None:
+            grouped.setdefault((log.student_id, log.created_at.date()), []).append(log)
 
     rows = []
     people_inside = 0
     people_out = 0
-    for student_id, student_logs in grouped.items():
+    for (student_id, day), student_logs in sorted(grouped.items(), key=lambda item: (item[0][1], item[0][0])):
+        _, end = day_bounds(datetime.combine(day, time.min))
         row = build_attendance_day_row(db, student_id, student_logs, end)
         if not row:
             continue
+        row["date"] = day
         if row["status"] == "inside":
             people_inside += 1
         elif row["status"] == "out":
@@ -79,12 +92,30 @@ def get_daily_attendance_summary(db: Session, day: datetime | None = None) -> di
     }
 
 
-def get_attendance_export_rows(db: Session) -> list[dict]:
-    logs = db.scalars(
+def get_filtered_attendance_logs(db: Session, filters: AttendanceFilters | None = None) -> list[AttendanceLog]:
+    filters = filters or AttendanceFilters()
+    stmt = (
         select(AttendanceLog)
+        .join(Student, AttendanceLog.student_id == Student.id)
         .where(AttendanceLog.student_id.is_not(None))
-        .order_by(AttendanceLog.student_id.asc(), AttendanceLog.created_at.asc())
-    ).all()
+    )
+    if filters.start_date:
+        stmt = stmt.where(AttendanceLog.created_at >= datetime.combine(filters.start_date, time.min))
+    if filters.end_date:
+        stmt = stmt.where(AttendanceLog.created_at <= datetime.combine(filters.end_date, time.max))
+    if filters.student_code:
+        stmt = stmt.where(Student.student_code.ilike(f"%{filters.student_code.strip()}%"))
+    if filters.class_name:
+        stmt = stmt.where(Student.class_name.ilike(f"%{filters.class_name.strip()}%"))
+    if filters.faculty:
+        stmt = stmt.where(Student.faculty.ilike(f"%{filters.faculty.strip()}%"))
+    if filters.method:
+        stmt = stmt.where(AttendanceLog.method == filters.method.strip())
+    return db.scalars(stmt.order_by(AttendanceLog.student_id.asc(), AttendanceLog.created_at.asc())).all()
+
+
+def get_attendance_export_rows(db: Session, filters: AttendanceFilters | None = None) -> list[dict]:
+    logs = get_filtered_attendance_logs(db, filters)
 
     grouped: dict[tuple[int, date], list[AttendanceLog]] = {}
     for log in logs:

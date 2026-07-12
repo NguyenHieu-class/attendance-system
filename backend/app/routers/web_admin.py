@@ -1,10 +1,11 @@
 import csv
 import io
 from pathlib import Path
+from urllib.parse import urlencode
 from uuid import uuid4
-from datetime import datetime
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -21,7 +22,7 @@ from app.models.nfc_enrollment import NfcEnrollment
 from app.models.student import Student
 from app.security import authenticate_admin, clear_session, create_session, get_current_admin, require_admin_page
 from app.services.access_policy_service import AccessEvent, evaluate_access
-from app.services.attendance_service import day_bounds, get_attendance_export_rows, get_daily_attendance_summary
+from app.services.attendance_service import AttendanceFilters, day_bounds, get_attendance_export_rows, get_attendance_summary, get_filtered_attendance_logs
 from app.services.camera_service import camera_service
 from app.services.door_service import ensure_default_door, get_settings_for_door
 from app.services.face_service import face_service
@@ -32,6 +33,53 @@ router = APIRouter(tags=["admin"])
 
 def templates(request: Request):
     return request.app.state.templates
+
+
+def clean_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def build_attendance_filters(
+    start_date: date | None,
+    end_date: date | None,
+    student_code: str | None,
+    class_name: str | None,
+    faculty: str | None,
+    method: str | None,
+) -> AttendanceFilters:
+    if start_date is None and end_date is None:
+        today = datetime.now().date()
+        start_date = today
+        end_date = today
+    elif start_date and end_date is None:
+        end_date = start_date
+    elif end_date and start_date is None:
+        start_date = end_date
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
+    return AttendanceFilters(
+        start_date=start_date,
+        end_date=end_date,
+        student_code=clean_text(student_code),
+        class_name=clean_text(class_name),
+        faculty=clean_text(faculty),
+        method=clean_text(method),
+    )
+
+
+def attendance_filter_query(filters: AttendanceFilters) -> dict:
+    values = {
+        "start_date": filters.start_date.isoformat() if filters.start_date else "",
+        "end_date": filters.end_date.isoformat() if filters.end_date else "",
+        "student_code": filters.student_code or "",
+        "class_name": filters.class_name or "",
+        "faculty": filters.faculty or "",
+        "method": filters.method or "",
+    }
+    return values
 
 
 @router.get("/")
@@ -305,8 +353,20 @@ def delete_nfc_card(
 
 
 @router.get("/admin/attendance")
-def attendance(request: Request, db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
-    logs = db.scalars(select(AttendanceLog).order_by(AttendanceLog.created_at.desc()).limit(200)).all()
+def attendance(
+    request: Request,
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    student_code: str | None = Query(None),
+    class_name: str | None = Query(None),
+    faculty: str | None = Query(None),
+    method: str | None = Query(None),
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin_page),
+):
+    filters = build_attendance_filters(start_date, end_date, student_code, class_name, faculty, method)
+    filter_values = attendance_filter_query(filters)
+    logs = list(reversed(get_filtered_attendance_logs(db, filters)))[0:200]
     log_rows = []
     for log in logs:
         student = db.get(Student, log.student_id) if log.student_id else None
@@ -319,12 +379,15 @@ def attendance(request: Request, db: Session = Depends(get_db), admin: Admin = D
                 "created_at": log.created_at,
             }
         )
-    summary = get_daily_attendance_summary(db)
+    summary = get_attendance_summary(db, filters)
+    export_query = urlencode({key: value for key, value in filter_values.items() if value})
     return templates(request).TemplateResponse(
         "attendance/list.html",
         {
             "request": request,
             "admin": admin,
+            "filters": filter_values,
+            "export_url": f"/admin/export/attendance.csv?{export_query}" if export_query else "/admin/export/attendance.csv",
             "log_rows": log_rows,
             "people_inside": summary["people_inside"],
             "people_out": summary["people_out"],
@@ -435,7 +498,17 @@ def csv_dict_response(filename: str, rows: list[dict], fields: list[str]) -> Str
 
 
 @router.get("/admin/export/attendance.csv")
-def export_attendance(db: Session = Depends(get_db), admin: Admin = Depends(require_admin_page)):
+def export_attendance(
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    student_code: str | None = Query(None),
+    class_name: str | None = Query(None),
+    faculty: str | None = Query(None),
+    method: str | None = Query(None),
+    db: Session = Depends(get_db),
+    admin: Admin = Depends(require_admin_page),
+):
+    filters = build_attendance_filters(start_date, end_date, student_code, class_name, faculty, method)
     fields = [
         "stt",
         "ma_sinh_vien",
@@ -452,7 +525,7 @@ def export_attendance(db: Session = Depends(get_db), admin: Admin = Depends(requ
         "thoi_gian_o_trong_lop",
         "trang_thai",
     ]
-    return csv_dict_response("attendance.csv", get_attendance_export_rows(db), fields)
+    return csv_dict_response("attendance.csv", get_attendance_export_rows(db, filters), fields)
 
 
 @router.get("/admin/export/access_logs.csv")

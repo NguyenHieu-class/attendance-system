@@ -1,6 +1,41 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="d-flex justify-content-between"><h1 class="h3">Diem danh</h1><a class="btn btn-outline-secondary" href="/admin/export/attendance.csv">Export CSV</a></div>
+<div class="d-flex justify-content-between"><h1 class="h3">Diem danh</h1><a class="btn btn-outline-secondary" href="{{ export_url }}">Export CSV</a></div>
+<form method="get" action="/admin/attendance" class="row g-2 align-items-end my-3">
+  <div class="col-md-2">
+    <label class="form-label">Tu ngay</label>
+    <input class="form-control" type="date" name="start_date" value="{{ filters.start_date }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Den ngay</label>
+    <input class="form-control" type="date" name="end_date" value="{{ filters.end_date }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Ma sinh vien</label>
+    <input class="form-control" name="student_code" value="{{ filters.student_code }}" placeholder="22010103">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Lop</label>
+    <input class="form-control" name="class_name" value="{{ filters.class_name }}" placeholder="CNTT K17">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Khoa</label>
+    <input class="form-control" name="faculty" value="{{ filters.faculty }}" placeholder="Cong nghe thong tin">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Phuong thuc</label>
+    <select class="form-select" name="method">
+      <option value="" {% if not filters.method %}selected{% endif %}>Tat ca</option>
+      {% for method in ["face","nfc","face_and_nfc"] %}
+      <option value="{{ method }}" {% if filters.method == method %}selected{% endif %}>{{ method }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary">Loc du lieu</button>
+    <a class="btn btn-link" href="/admin/attendance">Hom nay</a>
+  </div>
+</form>
 <div class="row g-3 my-3">
   <div class="col-md-4">
     <div class="card">
@@ -28,7 +63,7 @@
   </div>
 </div>
 
-<h2 class="h5 mt-4">Diem danh trong ngay</h2>
+<h2 class="h5 mt-4">Ket qua diem danh</h2>
 <table class="table table-sm">
   <tr><th>Sinh vien</th><th>Ma sinh vien</th><th>Thoi gian diem danh</th><th>Checkout</th><th>Phuong thuc</th><th>So lan vao</th><th>Thoi gian trong phong</th><th>Trang thai</th></tr>
   {% for row in attendance_rows %}
